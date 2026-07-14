@@ -57,7 +57,7 @@ export default function LoginPage() {
 
       const res = await apiPost<{ access_token: string }>(endpoint, body);
       localStorage.setItem("token", res.access_token);
-      window.location.href = "/";
+      window.location.href = "/workspace";
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка");
     } finally {

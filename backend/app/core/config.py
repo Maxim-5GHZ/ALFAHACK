@@ -21,5 +21,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
+    GIGACHAT_API_KEY: str = ""
+    GIGACHAT_CREDENTIALS_PATH: str = ""
+
 
 settings = Settings()

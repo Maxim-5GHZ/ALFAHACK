@@ -3,16 +3,22 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, LogIn, LogOut, User, Menu, X } from "lucide-react";
+import { ArrowLeft, LayoutDashboard, LogIn, LogOut, User, Menu, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { apiGet } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type UserInfo = { id: number; email: string; username: string };
+
+const linkClass = "text-sm font-medium transition-colors hover:text-primary";
+const linkActive = "text-primary";
+const linkInactive = "text-text-primary/60";
 
 export default function Header() {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
+  const isWorkspace = pathname.startsWith("/workspace");
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,12 +69,23 @@ export default function Header() {
         ) : (
           <>
             <nav className="hidden items-center gap-6 md:flex">
-              <Link
-                href="/"
-                className="text-sm font-medium text-text-primary/60 transition-colors hover:text-primary"
-              >
-                Главная
-              </Link>
+              {!isWorkspace && (
+                <Link
+                  href="/"
+                  className={cn(linkClass, pathname === "/" ? linkActive : linkInactive)}
+                >
+                  Главная
+                </Link>
+              )}
+              {user && (
+                <Link
+                  href="/workspace"
+                  className={cn(linkClass, isWorkspace ? linkActive : linkInactive, "flex items-center gap-1.5")}
+                >
+                  <LayoutDashboard size={15} />
+                  Рабочая
+                </Link>
+              )}
 
               {loading ? null : user ? (
                 <div className="flex items-center gap-3">
@@ -110,13 +127,30 @@ export default function Header() {
       {menuOpen && !isLoginPage && (
         <div className="border-t border-gray-200 bg-white px-4 pb-4 md:hidden">
           <nav className="flex flex-col gap-2 pt-3">
-            <Link
-              href="/"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-text-primary/60 transition-colors hover:bg-gray-50 hover:text-primary"
-              onClick={() => setMenuOpen(false)}
-            >
-              Главная
-            </Link>
+            {!isWorkspace && (
+              <Link
+                href="/"
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
+                  pathname === "/" ? "bg-gray-50 text-primary" : "text-text-primary/60"
+                )}
+                onClick={() => setMenuOpen(false)}
+              >
+                Главная
+              </Link>
+            )}
+            {user && (
+              <Link
+                href="/workspace"
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
+                  isWorkspace ? "bg-gray-50 text-primary" : "text-text-primary/60"
+                )}
+                onClick={() => setMenuOpen(false)}
+              >
+                Рабочая
+              </Link>
+            )}
 
             {loading ? null : user ? (
               <div className="flex items-center justify-between rounded-lg px-3 py-2">
