@@ -205,36 +205,136 @@ def _is_safety_block(text: str) -> bool:
 
 def _get_fallback_plan_by_history(history: list[dict[str, str]]) -> dict[str, Any]:
     user_text = " ".join([m.get("content", "").lower() for m in history if m.get("role") == "user"])
+    all_text = " ".join([m.get("content", "").lower() for m in history])
 
-    if any(k in user_text for k in ["кофе", "чай", "кафе", "еда", "бургер", "пицц", "бар", "выпеч", "пекар", "кошач", "котокаф", "котик", "кошка"]):
+    city = _extract_city(user_text)
+    niche_detected, niche_keywords = _detect_niche(user_text)
+
+    budget_num = _extract_budget(user_text)
+    budget_low = budget_num is not None and budget_num < 50000
+    budget_high = budget_num is not None and budget_num >= 300000
+
+    has_tax_fear = any(k in all_text for k in ["налог", "бухгалтер", "декларац", "отчет", "штраф"])
+    has_partner = any(k in all_text for k in ["партнер", "друг", "соосновател", "вместе", "напарник"])
+    has_experience_fear = any(k in all_text for k in ["опыт", "новичок", "начинающ", "не умею", "страшно", "боюсь", "переживаю"])
+
+    plan = copy.deepcopy(niche_detected)
+
+    city_suffix = f", {city}" if city != "твоём городе" else ""
+    plan["niche"] += city_suffix
+
+    pains = []
+    if has_tax_fear:
+        pains.append("страх налогов и отчётности")
+    if has_partner:
+        pains.append("опасения по поводу партнёрства")
+    if has_experience_fear:
+        pains.append("нехватка опыта")
+    if budget_low:
+        pains.append("ограниченный бюджет")
+    pains_str = ", ".join(pains) if pains else "типичные страхи начинающих"
+
+    plan["summary"] = (
+        f"Запуск в г. {city} с учётом выявленных барьеров: {pains_str}. "
+        f"Смета адаптирована под локальные цены аренды и закупок. "
+        f"Альфа-Банк предлагает инструменты для снятия каждого из барьеров."
+    )
+
+    if has_partner and "«Альфа.Тандем»" not in " ".join(plan["alfa_products"]):
+        plan["alfa_products"].append("«Альфа.Тандем» для прозрачного сплита доходов с партнёром")
+    if has_tax_fear and "налогов" not in " ".join(plan["alfa_products"]).lower():
+        plan["alfa_products"].append("«Умный Налоговый Автопилот» — забудь про отчётность")
+    if budget_low:
+        plan["alfa_products"].append("Молодёжный стартап-овердрафт от 4.5% на первые закупки")
+        plan["summary"] += " Для компенсации нехватки бюджета предусмотрен льготный кредитный продукт."
+        plan["monthly_revenue"] = round(plan["monthly_revenue"] * 0.7)
+        plan["monthly_expenses"] = round(plan["monthly_expenses"] * 0.75)
+        plan["payback_months"] = max(1, round(plan["payback_months"] * 1.4))
+        for exp in plan["expenses"]:
+            exp["amount"] = round(exp["amount"] * 0.75)
+    if budget_high:
+        plan["monthly_revenue"] = round(plan["monthly_revenue"] * 1.5)
+        plan["monthly_expenses"] = round(plan["monthly_expenses"] * 1.4)
+        for exp in plan["expenses"]:
+            exp["amount"] = round(exp["amount"] * 1.3)
+
+    if has_experience_fear:
+        plan["action_plan"].insert(0, "Пройди бесплатный обучающий курс по основам предпринимательства от Альфа-Банка")
+        plan["alfa_products"].append("Бесплатное обучение и шаблоны документов для начинающих")
+
+    if has_tax_fear and "Бесплатная онлайн-регистрация ИП" not in " ".join(plan["alfa_products"]):
+        plan["alfa_products"].insert(0, "Бесплатная онлайн-регистрация ИП без визита в банк")
+
+    return plan
+
+
+def _extract_city(text: str) -> str:
+    city_match = re.search(r"(?:в|из|по|для|около|рядом\s+с)\s+([А-Я][а-я\-ё]+)", text)
+    if city_match:
+        return city_match.group(1)
+    for city_key, city_name in [
+        ("калуг", "Калуга"), ("москв", "Москва"),
+        ("питер", "Санкт-Петербург"), ("спб", "Санкт-Петербург"),
+        ("казан", "Казань"), ("новосиб", "Новосибирск"),
+        ("екатеринбург", "Екатеринбург"), ("краснодар", "Краснодар"),
+        ("нижн", "Нижний Новгород"), ("челяб", "Челябинск"),
+        ("самар", "Самара"), ("уф", "Уфа"),
+        ("ростов", "Ростов-на-Дону"), ("тюмен", "Тюмень"),
+    ]:
+        if city_key in text.lower():
+            return city_name
+    return "твоём городе"
+
+
+def _detect_niche(user_text: str) -> tuple[dict, list[str]]:
+    if any(k in user_text for k in ["кофе", "чай", "кафе", "еда", "бургер", "пицц", "бар", "выпеч", "пекар"]):
+        return copy.deepcopy(MOCK_PLANS["horeca"]), ["horeca"]
+    if any(k in user_text for k in ["кошач", "котокаф", "котик", "кошка"]):
         plan = copy.deepcopy(MOCK_PLANS["horeca"])
-        if any(k in user_text for k in ["кошач", "котокаф", "котик", "кошка"]):
-            plan["niche"] = "Интерактивное котокафе"
-            plan["summary"] = "Открытие уютного котокафе с игровой зоной. Расчет составлен с учетом коммерческой аренды помещения, ветеринарного контроля котиков, а также покупки б/у оборудования и мебели на Авито."
-            plan["expenses"] = [
-                {"name": "Аренда помещения (оценка по Авито, 40 кв.м. под требования котов)", "amount": 60000.0},
-                {"name": "Обустройство игровой зоны для животных и мебель (кошачьи городки, лежанки, когтеточки)", "amount": 55000.0},
-                {"name": "Профессиональная кофемашина и барная стойка (б/у Авито)", "amount": 110000.0},
-                {"name": "Первичный ветеринарный осмотр, вакцинация и чипирование", "amount": 25000.0},
-                {"name": "Закупка сырья (чай, зерна, сиропы) и кошачьего корма", "amount": 40000.0},
-                {"name": "Маркетинг, вывеска и продвижение в социальных сетях", "amount": 20000.0},
-            ]
-            plan["action_plan"] = [
-                "Бесплатно зарегистрировать ИП через Альфа-Банк онлайн.",
-                "Найти безопасное помещение на Авито Недвижимости, соответствующее санитарным нормам.",
-                "Заключить партнерство с местным приютом для животных для размещения котиков.",
-                "Провести ветеринарный осмотр и подготовить паспорта для пушистых резидентов.",
-                "Подключить онлайн-кассу Альфа-Касса с «Умным Налоговым Автопилотом».",
-                "Настроить сплит-систему «Альфа.Тандем» для прозрачного распределения выручки.",
-                "Открыть двери котокафе и запустить рекламу у местных блогеров.",
-            ]
-        return plan
-    elif any(k in user_text for k in ["маникюр", "салон", "бьюти", "ногти", "ногот", "стриж", "волос", "ресниц", "космет", "визаж", "барбер"]):
-        return copy.deepcopy(MOCK_PLANS["beauty"])
-    elif any(k in user_text for k in ["одежд", "шоп", "магаз", "мерч", "бренд", "товар", "игрушк", "обувь", "вещ"]):
-        return copy.deepcopy(MOCK_PLANS["retail"])
-    else:
-        return copy.deepcopy(MOCK_PLANS["generic"])
+        plan["niche"] = "Интерактивное котокафе"
+        plan["summary"] = "Открытие уютного котокафе с игровой зоной. Расчет составлен с учетом коммерческой аренды помещения, ветеринарного контроля котиков, а также покупки б/у оборудования и мебели на Авито."
+        plan["expenses"] = [
+            {"name": "Аренда помещения (оценка по Авито, 40 кв.м. под требования котов)", "amount": 60000.0},
+            {"name": "Обустройство игровой зоны для животных и мебель (кошачьи городки, лежанки, когтеточки)", "amount": 55000.0},
+            {"name": "Профессиональная кофемашина и барная стойка (б/у Авито)", "amount": 110000.0},
+            {"name": "Первичный ветеринарный осмотр, вакцинация и чипирование", "amount": 25000.0},
+            {"name": "Закупка сырья (чай, зерна, сиропы) и кошачьего корма", "amount": 40000.0},
+            {"name": "Маркетинг, вывеска и продвижение в социальных сетях", "amount": 20000.0},
+        ]
+        plan["action_plan"] = [
+            "Бесплатно зарегистрировать ИП через Альфа-Банк онлайн.",
+            "Найти безопасное помещение на Авито Недвижимости, соответствующее санитарным нормам.",
+            "Заключить партнерство с местным приютом для животных для размещения котиков.",
+            "Провести ветеринарный осмотр и подготовить паспорта для пушистых резидентов.",
+            "Подключить онлайн-кассу Альфа-Касса с «Умным Налоговым Автопилотом».",
+            "Настроить сплит-систему «Альфа.Тандем» для прозрачного распределения выручки.",
+            "Открыть двери котокафе и запустить рекламу у местных блогеров.",
+        ]
+        return plan, ["cat_cafe"]
+    if any(k in user_text for k in ["маникюр", "салон", "бьюти", "ногти", "ногот", "стриж", "волос", "ресниц", "космет", "визаж", "барбер"]):
+        return copy.deepcopy(MOCK_PLANS["beauty"]), ["beauty"]
+    if any(k in user_text for k in ["одежд", "шоп", "магаз", "мерч", "бренд", "товар", "игрушк", "обувь", "вещ"]):
+        return copy.deepcopy(MOCK_PLANS["retail"]), ["retail"]
+    return copy.deepcopy(MOCK_PLANS["generic"]), ["generic"]
+
+
+def _extract_budget(text: str) -> int | None:
+    amounts = re.findall(r'(?:^|\s)(\d{3,9})(?:\s|$|\.|,|тыс|руб|₽)', text)
+    if not amounts:
+        amounts = re.findall(r'(\d+)\s*(?:тыс|к|круб|тыщ)', text)
+        if amounts:
+            return int(amounts[0]) * 1000
+    if amounts:
+        val = int(amounts[0])
+        if val < 1000:
+            val *= 1000
+        return val
+    digit_matches = re.findall(r'\b(\d+)\b', text)
+    for d in digit_matches:
+        v = int(d)
+        if 5000 <= v <= 10000000:
+            return v
+    return None
 
 
 class GigaChatService:

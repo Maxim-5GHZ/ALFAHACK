@@ -17,6 +17,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UpdateUserRequest(BaseModel):
+    username: str | None = None
+    password: str | None = None
+
+
 class UserResponse(BaseModel):
     id: int
     email: str

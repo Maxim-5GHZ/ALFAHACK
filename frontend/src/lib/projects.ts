@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost, apiPut } from "./api";
 
 export type Project = {
   id: number;
@@ -59,6 +59,14 @@ export function sendMessage(
 export function generatePlan(projectId: number): Promise<BusinessPlan> {
   return apiPost(
     `/api/v1/projects/${projectId}/generate-plan`,
+    {},
+    getToken(),
+  );
+}
+
+export function updatePlan(projectId: number): Promise<BusinessPlan> {
+  return apiPut(
+    `/api/v1/projects/${projectId}/plan`,
     {},
     getToken(),
   );

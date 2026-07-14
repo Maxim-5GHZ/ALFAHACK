@@ -103,12 +103,15 @@ export default function Header() {
 
               {loading ? null : user ? (
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1.5 text-sm text-text-primary/60">
+                  <Link
+                    href="/profile"
+                    className="flex items-center gap-1.5 text-sm text-text-primary/60 hover:text-primary transition-colors"
+                  >
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
                       {user.username.charAt(0).toUpperCase()}
                     </span>
                     {user.username}
-                  </span>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-1 text-sm text-gray-400 transition-colors hover:text-primary"
@@ -170,12 +173,16 @@ export default function Header() {
 
             {loading ? null : user ? (
               <div className="flex items-center justify-between rounded-lg px-3 py-2">
-                <span className="flex items-center gap-2 text-sm text-text-primary/60">
+                <Link
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 text-sm text-text-primary/60 hover:text-primary transition-colors"
+                >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
                     {user.username.charAt(0).toUpperCase()}
                   </span>
                   {user.username}
-                </span>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="text-sm text-gray-400 transition-colors hover:text-primary"

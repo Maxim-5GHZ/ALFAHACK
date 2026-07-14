@@ -190,6 +190,82 @@ async def get_plan(
     return _plan_to_response(plan)
 
 
+@router.put("/{project_id}/plan", response_model=BusinessPlanResponse)
+async def update_plan(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_user_project(project_id, current_user.id, db)
+
+    existing = await db.execute(
+        select(BusinessPlan).where(BusinessPlan.project_id == project.id)
+    )
+    old_plan = existing.scalar_one_or_none()
+
+    history_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.project_id == project.id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in history_result.scalars().all()
+    ]
+
+    user_text_block = " ".join([m["content"] for m in history if m["role"] == "user"])
+
+    city = "Казань"
+    city_match = re.search(r"(в|из|по)\s+([А-Я][а-я\-]+)", user_text_block)
+    if city_match:
+        city = city_match.group(2)
+    elif "калуг" in user_text_block.lower():
+        city = "Калуга"
+    elif "москв" in user_text_block.lower():
+        city = "Москва"
+    elif "питер" in user_text_block.lower() or "спб" in user_text_block.lower():
+        city = "Санкт-Петербург"
+
+    niche_query = "кофейня"
+    if any(k in user_text_block.lower() for k in ["маникюр", "ногти", "бьюти", "салон"]):
+        niche_query = "салон красоты"
+    elif any(k in user_text_block.lower() for k in ["одежд", "шоп", "магазин"]):
+        niche_query = "магазин одежды"
+
+    competitors_count = await yandex_maps.get_competitor_count(niche_query, city)
+    data = await gigachat.generate_business_plan_json(history, current_user.username)
+
+    if old_plan:
+        old_plan.niche = data.get("niche", old_plan.niche)
+        old_plan.summary = data.get("summary", old_plan.summary)
+        old_plan.monthly_revenue = data.get("monthly_revenue", old_plan.monthly_revenue)
+        old_plan.monthly_expenses = data.get("monthly_expenses", old_plan.monthly_expenses)
+        old_plan.payback_months = data.get("payback_months", old_plan.payback_months)
+        old_plan.expenses_json = data.get("expenses", old_plan.expenses_json)
+        old_plan.action_plan_json = data.get("action_plan", old_plan.action_plan_json)
+        old_plan.alfa_products_json = data.get("alfa_products", old_plan.alfa_products_json)
+        old_plan.competitors_count = competitors_count
+        plan = old_plan
+    else:
+        plan = BusinessPlan(
+            project_id=project.id,
+            niche=data.get("niche", ""),
+            summary=data.get("summary", ""),
+            monthly_revenue=data.get("monthly_revenue", 0),
+            monthly_expenses=data.get("monthly_expenses", 0),
+            payback_months=data.get("payback_months", 0),
+            expenses_json=data.get("expenses", []),
+            action_plan_json=data.get("action_plan", []),
+            alfa_products_json=data.get("alfa_products", []),
+            competitors_count=competitors_count,
+        )
+        db.add(plan)
+
+    await db.commit()
+    await db.refresh(plan)
+    return _plan_to_response(plan)
+
+
 async def _get_user_project(project_id: int, user_id: int, db: AsyncSession) -> Project:
     result = await db.execute(
         select(Project).where(Project.id == project_id, Project.user_id == user_id)

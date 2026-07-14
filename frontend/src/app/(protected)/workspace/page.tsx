@@ -16,8 +16,6 @@ import {
   Clock,
   Target,
   CheckCircle,
-  Eye,
-  EyeOff,
   MapPin,
   ChevronRight,
   ShieldCheck,
@@ -32,6 +30,7 @@ import {
   getChatHistory,
   sendMessage,
   generatePlan,
+  updatePlan,
   getPlan,
   type Project,
   type ChatMessage,
@@ -53,10 +52,11 @@ export default function WorkspacePage() {
   const [started, setStarted] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollChatToBottom = useCallback(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {
@@ -170,7 +170,9 @@ export default function WorkspacePage() {
     setGenerating(true);
     setPlanError(null);
     try {
-      const businessPlan = await generatePlan(selectedId);
+      const businessPlan = plan
+        ? await updatePlan(selectedId)
+        : await generatePlan(selectedId);
       setPlan(businessPlan);
     } catch (e) {
       setPlanError(e instanceof Error ? e.message : "Ошибка генерации плана");
@@ -272,7 +274,7 @@ export default function WorkspacePage() {
 
             <div className="flex flex-1 flex-col bg-white overflow-hidden">
 
-              <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
                 {loadingMessages ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -324,7 +326,6 @@ export default function WorkspacePage() {
                     Бизнес-консультант формирует ответ...
                   </div>
                 )}
-                <div ref={chatEndRef} />
               </div>
 
               <div className="border-t border-gray-200 p-4 bg-white">
@@ -372,44 +373,77 @@ export default function WorkspacePage() {
               <div className="p-4 space-y-5 flex-1">
                 {plan ? (
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-gray-150 bg-white p-4.5 shadow-sm">
+                    <div className="rounded-2xl border border-gray-150 bg-white p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-xs font-bold text-text-primary/80 uppercase">Оценка рынка (Яндекс.Карты)</span>
-                        <MapPin size={15} className="text-primary animate-bounce" />
+                        <MapPin size={15} className="text-primary" />
                       </div>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-2xl font-extrabold text-text-primary">
                           {plan.competitors_count}
                         </span>
-                        <span className="text-xs text-gray-500 font-medium">конкурентных точек в городе</span>
+                        <span className="text-xs text-gray-500 font-medium">конкурентов в городе</span>
                       </div>
-                      <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
-                        Мы автоматически проанализировали инфраструктуру Яндекс.Карт, чтобы дать вам представление о плотности аналогичного бизнеса.
-                      </p>
+                      {(() => {
+                        const c = plan.competitors_count ?? 0;
+                        let level: string, color: string, pct: number;
+                        if (c <= 5) { level = "Очень низкая"; color = "bg-accent-green"; pct = 15; }
+                        else if (c <= 15) { level = "Низкая"; color = "bg-green-400"; pct = 30; }
+                        else if (c <= 40) { level = "Средняя"; color = "bg-yellow-400"; pct = 55; }
+                        else if (c <= 80) { level = "Высокая"; color = "bg-orange-400"; pct = 75; }
+                        else { level = "Очень высокая"; color = "bg-red-400"; pct = 95; }
+                        return (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-[11px] mb-1">
+                              <span className="text-gray-500">Плотность конкуренции</span>
+                              <span className={cn("font-bold", c <= 15 ? "text-accent-green" : c <= 40 ? "text-yellow-600" : "text-red-500")}>{level}</span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                              <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-2.5">
-                      <div className="rounded-xl border border-gray-200 bg-white p-3.5 flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-accent-green" /> Выручка
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-text-primary/70 mb-3">Смета расходов</h4>
+                      <div className="space-y-2">
+                        {plan.expenses.map((item, i) => {
+                          const pct = plan.monthly_expenses > 0 ? ((item.amount / plan.monthly_expenses) * 100) : 0;
+                          return (
+                            <div key={i}>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-600 truncate flex-1">{item.name}</span>
+                                <span className="font-semibold text-text-primary ml-2">{item.amount.toLocaleString()} ₽</span>
+                              </div>
+                              <div className="h-1 w-full overflow-hidden rounded-full bg-gray-100 mt-0.5">
+                                <div className="h-full rounded-full bg-primary/40" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-2 text-xs font-bold">
+                        <span className="text-text-primary">Итого расходов</span>
+                        <span className="text-primary">{plan.monthly_expenses.toLocaleString()} ₽/мес</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
+                          <TrendingUp size={12} className="text-accent-green" /> Выручка
                         </span>
-                        <span className="text-sm font-extrabold text-accent-green">
-                          {plan.monthly_revenue.toLocaleString()} ₽/мес
+                        <span className="text-sm font-extrabold text-accent-green block mt-0.5">
+                          {plan.monthly_revenue.toLocaleString()} ₽
                         </span>
                       </div>
-                      <div className="rounded-xl border border-gray-200 bg-white p-3.5 flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                          <Banknote size={14} className="text-primary" /> Расходы
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
+                          <Clock size={12} className="text-blue-500" /> Окупаемость
                         </span>
-                        <span className="text-sm font-extrabold text-primary">
-                          {plan.monthly_expenses.toLocaleString()} ₽/мес
-                        </span>
-                      </div>
-                      <div className="rounded-xl border border-gray-200 bg-white p-3.5 flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                          <Clock size={14} className="text-blue-500" /> Окупаемость
-                        </span>
-                        <span className="text-sm font-extrabold text-text-primary">
+                        <span className="text-sm font-extrabold text-text-primary block mt-0.5">
                           ~ {plan.payback_months} мес.
                         </span>
                       </div>
@@ -453,19 +487,18 @@ export default function WorkspacePage() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 p-4">
-                      <h4 className="text-xs font-bold text-text-primary flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-primary" />
-                        Безопасный старт
-                      </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                        Все шаги синхронизированы с бесплатным открытием ИП и инструментами Альфа-Банка.
-                      </p>
-                      <div className="mt-3 flex gap-2">
-                        <Button className="w-full h-8 text-[11px] font-semibold bg-primary hover:bg-primary-dark">
-                          Открыть ИП бесплатно
-                        </Button>
-                      </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleGeneratePlan}
+                        disabled={generating}
+                        className="flex-1 h-8 text-[11px] font-semibold bg-primary hover:bg-primary-dark"
+                      >
+                        {generating ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                        Скорректировать план
+                      </Button>
+                      <Button className="h-8 text-[11px] font-semibold bg-accent-green hover:bg-accent-green/90 text-white">
+                        Открыть ИП
+                      </Button>
                     </div>
                   </div>
                 ) : (
