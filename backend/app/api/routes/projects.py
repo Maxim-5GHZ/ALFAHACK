@@ -39,6 +39,12 @@ async def create_project(
     db.add(project)
     await db.commit()
     await db.refresh(project)
+
+    welcome = await gigachat.get_chat_reply([], current_user.username)
+    welcome_msg = ChatMessage(project_id=project.id, role="ai", content=welcome)
+    db.add(welcome_msg)
+    await db.commit()
+
     return project
 
 
@@ -81,7 +87,7 @@ async def chat(
         for m in history_result.scalars().all()
     ]
 
-    reply = await gigachat.get_chat_reply(history)
+    reply = await gigachat.get_chat_reply(history, current_user.username)
 
     ai_msg = ChatMessage(project_id=project.id, role="ai", content=reply)
     db.add(ai_msg)
@@ -122,7 +128,7 @@ async def generate_plan(
         for m in history_result.scalars().all()
     ]
 
-    data = await gigachat.generate_business_plan_json(history)
+    data = await gigachat.generate_business_plan_json(history, current_user.username)
 
     plan = BusinessPlan(
         project_id=project.id,
