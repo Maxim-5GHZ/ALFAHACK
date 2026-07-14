@@ -17,6 +17,8 @@ import {
   Target,
   CheckCircle,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -261,13 +263,19 @@ export default function WorkspacePage() {
                     )}
                     <div
                       className={cn(
-                        "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                        "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:text-xs [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-gray-200 [&_pre]:p-3 [&_pre]:text-xs [&_pre]:leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_strong]:font-semibold",
                         msg.role === "ai"
                           ? "bg-gray-100 text-text-primary"
                           : "bg-primary text-white",
                       )}
                     >
-                      {msg.content}
+                      {msg.role === "ai" ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      ) : (
+                        msg.content
+                      )}
                     </div>
                     {msg.role === "user" && (
                       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">

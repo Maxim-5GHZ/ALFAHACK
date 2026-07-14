@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, LayoutDashboard, LogIn, LogOut, User, Menu, X } from "lucide-react";
+import {
+  ArrowLeft,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  User,
+  Menu,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { apiGet } from "@/lib/api";
@@ -71,14 +79,21 @@ export default function Header() {
             <nav className="hidden items-center gap-6 md:flex">
               <Link
                 href="/"
-                className={cn(linkClass, pathname === "/" ? linkActive : linkInactive)}
+                className={cn(
+                  linkClass,
+                  pathname === "/" ? linkActive : linkInactive,
+                )}
               >
                 Главная
               </Link>
               {user && (
                 <Link
                   href="/workspace"
-                  className={cn(linkClass, isWorkspace ? linkActive : linkInactive, "flex items-center gap-1.5")}
+                  className={cn(
+                    linkClass,
+                    isWorkspace ? linkActive : linkInactive,
+                    "flex items-center gap-1.5",
+                  )}
                 >
                   <LayoutDashboard size={15} />
                   Цифровой консультант
@@ -129,7 +144,9 @@ export default function Header() {
               href="/"
               className={cn(
                 "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
-                pathname === "/" ? "bg-gray-50 text-primary" : "text-text-primary/60"
+                pathname === "/"
+                  ? "bg-gray-50 text-primary"
+                  : "text-text-primary/60",
               )}
               onClick={() => setMenuOpen(false)}
             >
@@ -140,7 +157,9 @@ export default function Header() {
                 href="/workspace"
                 className={cn(
                   "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
-                  isWorkspace ? "bg-gray-50 text-primary" : "text-text-primary/60"
+                  isWorkspace
+                    ? "bg-gray-50 text-primary"
+                    : "text-text-primary/60",
                 )}
                 onClick={() => setMenuOpen(false)}
               >

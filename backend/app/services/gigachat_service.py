@@ -1,8 +1,8 @@
+import asyncio
 import json
 import logging
 from typing import Any
 
-import asyncio
 from gigachat import GigaChat
 from gigachat.models import Chat, Messages, MessagesRole
 
@@ -45,26 +45,22 @@ class GigaChatService:
                 credentials=settings.GIGACHAT_API_KEY,
                 verify_ssl_certs=False,
             )
+            logger.info("GigaChat client initialized")
         else:
-            logger.error("GIGACHAT_API_KEY не задан")
+            logger.warning("GIGACHAT_API_KEY не задан, GigaChat недоступен")
 
     async def get_chat_reply(self, history: list[dict[str, str]]) -> str:
-        if not self._giga:
+        try:
+            return await self._do_gigachat_call(history, SYSTEM_PROMPT_CHAT)
+        except Exception:
+            logger.exception("GigaChat call failed")
             return "Извините, сервис временно недоступен. Попробуйте позже."
 
-        messages = [Messages(role=MessagesRole.SYSTEM, content=SYSTEM_PROMPT_CHAT)]
-        for msg in history:
-            role = MessagesRole.USER if msg["role"] == "user" else MessagesRole.ASSISTANT
-            messages.append(Messages(role=role, content=msg["content"]))
-
-        payload = Chat(messages=messages)
-
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, self._giga.chat, payload)
-        return response.choices[0].message.content  # type: ignore[no-any-return]
-
     async def generate_business_plan_json(self, history: list[dict[str, str]]) -> dict[str, Any]:
-        if not self._giga:
+        try:
+            raw = await self._do_gigachat_call(history, SYSTEM_PROMPT_PLAN)
+        except Exception:
+            logger.exception("GigaChat call failed")
             return {
                 "niche": "Неизвестно",
                 "summary": "Сервис временно недоступен",
@@ -76,19 +72,9 @@ class GigaChatService:
                 "alfa_products": [],
             }
 
-        messages = [Messages(role=MessagesRole.SYSTEM, content=SYSTEM_PROMPT_PLAN)]
-        for msg in history:
-            role = MessagesRole.USER if msg["role"] == "user" else MessagesRole.ASSISTANT
-            messages.append(Messages(role=role, content=msg["content"]))
-
-        payload = Chat(messages=messages)
-
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, self._giga.chat, payload)
-        raw = _clean_json_response(response.choices[0].message.content)
-
+        cleaned = _clean_json_response(raw)
         try:
-            return json.loads(raw)  # type: ignore[no-any-return]
+            return json.loads(cleaned)
         except json.JSONDecodeError:
             logger.exception("Failed to parse LLM response as JSON")
             return {
@@ -101,3 +87,13 @@ class GigaChatService:
                 "action_plan": [],
                 "alfa_products": [],
             }
+
+    async def _do_gigachat_call(self, history: list[dict[str, str]], system_prompt: str) -> str:
+        messages = [Messages(role=MessagesRole.SYSTEM, content=system_prompt)]
+        for msg in history:
+            role = MessagesRole.USER if msg["role"] == "user" else MessagesRole.ASSISTANT
+            messages.append(Messages(role=role, content=msg["content"]))
+        payload = Chat(messages=messages)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, self._giga.chat, payload)
+        return response.choices[0].message.content

@@ -28,6 +28,8 @@ export default function Sidebar() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [open, setOpen] = useState(false);
 
+  if (pathname.startsWith("/workspace")) return null;
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
