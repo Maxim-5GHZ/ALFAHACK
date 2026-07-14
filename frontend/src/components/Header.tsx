@@ -69,21 +69,19 @@ export default function Header() {
         ) : (
           <>
             <nav className="hidden items-center gap-6 md:flex">
-              {!isWorkspace && (
-                <Link
-                  href="/"
-                  className={cn(linkClass, pathname === "/" ? linkActive : linkInactive)}
-                >
-                  Главная
-                </Link>
-              )}
+              <Link
+                href="/"
+                className={cn(linkClass, pathname === "/" ? linkActive : linkInactive)}
+              >
+                Главная
+              </Link>
               {user && (
                 <Link
                   href="/workspace"
                   className={cn(linkClass, isWorkspace ? linkActive : linkInactive, "flex items-center gap-1.5")}
                 >
                   <LayoutDashboard size={15} />
-                  Рабочая
+                  Цифровой консультант
                 </Link>
               )}
 
@@ -127,18 +125,16 @@ export default function Header() {
       {menuOpen && !isLoginPage && (
         <div className="border-t border-gray-200 bg-white px-4 pb-4 md:hidden">
           <nav className="flex flex-col gap-2 pt-3">
-            {!isWorkspace && (
-              <Link
-                href="/"
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
-                  pathname === "/" ? "bg-gray-50 text-primary" : "text-text-primary/60"
-                )}
-                onClick={() => setMenuOpen(false)}
-              >
-                Главная
-              </Link>
-            )}
+            <Link
+              href="/"
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
+                pathname === "/" ? "bg-gray-50 text-primary" : "text-text-primary/60"
+              )}
+              onClick={() => setMenuOpen(false)}
+            >
+              Главная
+            </Link>
             {user && (
               <Link
                 href="/workspace"
@@ -148,7 +144,7 @@ export default function Header() {
                 )}
                 onClick={() => setMenuOpen(false)}
               >
-                Рабочая
+                Цифровой консультант
               </Link>
             )}
 
