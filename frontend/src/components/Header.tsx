@@ -11,6 +11,7 @@ import {
   User,
   Menu,
   X,
+  Gamepad2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export default function Header() {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const isWorkspace = pathname.startsWith("/workspace");
+  const isDashboard = pathname.startsWith("/dashboard");
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,17 +90,30 @@ export default function Header() {
                 Главная
               </Link>
               {user && (
-                <Link
-                  href="/workspace"
-                  className={cn(
-                    linkClass,
-                    isWorkspace ? linkActive : linkInactive,
-                    "flex items-center gap-1.5",
-                  )}
-                >
-                  <LayoutDashboard size={15} />
-                  Цифровой консультант
-                </Link>
+                <>
+                  <Link
+                    href="/dashboard"
+                    className={cn(
+                      linkClass,
+                      isDashboard ? linkActive : linkInactive,
+                      "flex items-center gap-1.5",
+                    )}
+                  >
+                    <Gamepad2 size={15} />
+                    Мой бизнес
+                  </Link>
+                  <Link
+                    href="/workspace"
+                    className={cn(
+                      linkClass,
+                      isWorkspace ? linkActive : linkInactive,
+                      "flex items-center gap-1.5",
+                    )}
+                  >
+                    <LayoutDashboard size={15} />
+                    Бизнес-ассистент
+                  </Link>
+                </>
               )}
 
               {loading ? null : user ? (
@@ -157,18 +172,32 @@ export default function Header() {
               Главная
             </Link>
             {user && (
-              <Link
-                href="/workspace"
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
-                  isWorkspace
-                    ? "bg-gray-50 text-primary"
-                    : "text-text-primary/60",
-                )}
-                onClick={() => setMenuOpen(false)}
-              >
-                Цифровой консультант
-              </Link>
+              <>
+                <Link
+                  href="/dashboard"
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
+                    isDashboard
+                      ? "bg-gray-50 text-primary"
+                      : "text-text-primary/60",
+                  )}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Мой бизнес
+                </Link>
+                <Link
+                  href="/workspace"
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-50 hover:text-primary",
+                    isWorkspace
+                      ? "bg-gray-50 text-primary"
+                      : "text-text-primary/60",
+                  )}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Бизнес-ассистент
+                </Link>
+              </>
             )}
 
             {loading ? null : user ? (

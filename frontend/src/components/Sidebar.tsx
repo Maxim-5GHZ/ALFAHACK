@@ -11,6 +11,7 @@ import {
   X,
   User,
   ChevronRight,
+  Gamepad2,
 } from "lucide-react";
 
 import { apiGet } from "@/lib/api";
@@ -20,7 +21,8 @@ type UserInfo = { id: number; email: string; username: string };
 
 const navItems = [
   { href: "/", label: "Главная", icon: Home },
-  { href: "/workspace", label: "Цифровой консультант", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Мой бизнес", icon: Gamepad2 },
+  { href: "/workspace", label: "Бизнес-ассистент", icon: LayoutDashboard },
 ];
 
 export default function Sidebar() {
@@ -28,15 +30,14 @@ export default function Sidebar() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [open, setOpen] = useState(false);
 
-  if (pathname.startsWith("/workspace") || pathname.startsWith("/profile")) return null;
-
   useEffect(() => {
+    if (pathname.startsWith("/workspace") || pathname.startsWith("/profile") || pathname.startsWith("/dashboard")) return;
     const token = localStorage.getItem("token");
     if (!token) return;
     apiGet<UserInfo>("/api/v1/auth/me", token)
       .then(setUser)
       .catch(() => localStorage.removeItem("token"));
-  }, []);
+  }, [pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -106,6 +107,8 @@ export default function Sidebar() {
       </div>
     </aside>
   );
+
+  if (pathname.startsWith("/workspace") || pathname.startsWith("/profile") || pathname.startsWith("/dashboard")) return null;
 
   return (
     <>

@@ -1,6 +1,7 @@
 import re
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,8 +19,28 @@ from app.services.yandex_maps_service import YandexMapsService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
+
+class StepCompleteRequest(BaseModel):
+    step_text: str
+    is_completed: bool
+
 gigachat = GigaChatService()
 yandex_maps = YandexMapsService()
+
+
+class DraftChatRequest(BaseModel):
+    messages: list[dict[str, str]]
+    text: str
+
+
+@router.post("/chat/draft")
+async def draft_chat(
+    body: DraftChatRequest,
+    current_user: User = Depends(get_current_user),
+):
+    history = body.messages + [{"role": "user", "content": body.text}]
+    reply = await gigachat.get_chat_reply(history, current_user.username)
+    return {"reply": reply}
 
 
 @router.get("", response_model=list[ProjectResponse])
@@ -28,7 +49,10 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Project).where(Project.user_id == current_user.id).order_by(Project.created_at.desc())
+        select(Project)
+        .options(selectinload(Project.business_plan))
+        .where(Project.user_id == current_user.id)
+        .order_by(Project.created_at.desc())
     )
     return result.scalars().all()
 
@@ -44,11 +68,16 @@ async def create_project(
     await db.refresh(project)
 
     welcome = await gigachat.get_chat_reply([], current_user.username)
-    welcome_msg = ChatMessage(project_id=project.id, role="ai", content=welcome)
+    welcome_msg = ChatMessage(project_id=project.id, role="ai", content=welcome, thread_id="workspace")
     db.add(welcome_msg)
     await db.commit()
 
-    return project
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.business_plan))
+        .where(Project.id == project.id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/{project_id}/messages", response_model=list[ChatMessageResponse])
@@ -75,14 +104,14 @@ async def chat(
 ):
     project = await _get_user_project(project_id, current_user.id, db)
 
-    user_msg = ChatMessage(project_id=project.id, role="user", content=body.text)
+    user_msg = ChatMessage(project_id=project.id, role="user", content=body.text, thread_id=body.thread_id)
     db.add(user_msg)
     await db.commit()
     await db.refresh(user_msg)
 
     history_result = await db.execute(
         select(ChatMessage)
-        .where(ChatMessage.project_id == project.id)
+        .where(ChatMessage.project_id == project.id, ChatMessage.thread_id == body.thread_id)
         .order_by(ChatMessage.created_at.asc())
     )
     history = [
@@ -90,9 +119,18 @@ async def chat(
         for m in history_result.scalars().all()
     ]
 
-    reply = await gigachat.get_chat_reply(history, current_user.username)
+    plan_result = await db.execute(select(BusinessPlan).where(BusinessPlan.project_id == project.id))
+    plan_obj = plan_result.scalar_one_or_none()
+    plan_data = {
+        "niche": plan_obj.niche,
+        "monthly_revenue": plan_obj.monthly_revenue,
+        "completed_steps_json": plan_obj.completed_steps_json,
+        "action_plan_json": plan_obj.action_plan_json
+    } if plan_obj else None
 
-    ai_msg = ChatMessage(project_id=project.id, role="ai", content=reply)
+    reply = await gigachat.get_chat_reply(history, current_user.username, plan_data)
+
+    ai_msg = ChatMessage(project_id=project.id, role="ai", content=reply, thread_id=body.thread_id)
     db.add(ai_msg)
     await db.commit()
     await db.refresh(ai_msg)
@@ -266,6 +304,100 @@ async def update_plan(
     return _plan_to_response(plan)
 
 
+@router.post("/{project_id}/complete-step")
+async def complete_step(
+    project_id: int,
+    body: StepCompleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_user_project(project_id, current_user.id, db)
+
+    plan_result = await db.execute(select(BusinessPlan).where(BusinessPlan.project_id == project.id))
+    plan = plan_result.scalar_one_or_none()
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    completed = list(plan.completed_steps_json)
+    if body.is_completed and body.step_text not in completed:
+        completed.append(body.step_text)
+    elif not body.is_completed and body.step_text in completed:
+        completed.remove(body.step_text)
+
+    plan.completed_steps_json = completed
+
+    ai_msg = None
+    if body.is_completed:
+        action_plan = list(plan.action_plan_json)
+        next_step = None
+        for step in action_plan:
+            if step not in completed:
+                next_step = step
+                break
+
+        reply = await gigachat.generate_step_completion_message(body.step_text, next_step, current_user.username)
+
+        ai_msg = ChatMessage(project_id=project.id, role="ai", content=reply, thread_id="dashboard_main")
+        db.add(ai_msg)
+
+    await db.commit()
+
+    response_data = {"completed_steps": plan.completed_steps_json}
+    if ai_msg:
+        await db.refresh(ai_msg)
+        response_data["ai_message"] = {
+            "id": ai_msg.id,
+            "role": ai_msg.role,
+            "content": ai_msg.content,
+            "thread_id": ai_msg.thread_id,
+            "created_at": ai_msg.created_at.isoformat()
+        }
+
+    return response_data
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_user_project(project_id, current_user.id, db)
+
+    await db.execute(sa_delete(BusinessPlan).where(BusinessPlan.project_id == project.id))
+    await db.execute(sa_delete(ChatMessage).where(ChatMessage.project_id == project.id))
+    await db.delete(project)
+    await db.commit()
+
+    return {"detail": "Project deleted"}
+
+
+@router.delete("/{project_id}/messages/{message_id}")
+async def delete_chat_message(
+    project_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_user_project(project_id, current_user.id, db)
+
+    result = await db.execute(
+        select(ChatMessage).where(
+            ChatMessage.id == message_id,
+            ChatMessage.project_id == project_id,
+        )
+    )
+    msg = result.scalar_one_or_none()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    await db.delete(msg)
+    await db.commit()
+
+    return {"detail": "Message deleted"}
+
+
 async def _get_user_project(project_id: int, user_id: int, db: AsyncSession) -> Project:
     result = await db.execute(
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
@@ -286,5 +418,6 @@ def _plan_to_response(plan: BusinessPlan) -> BusinessPlanResponse:
         expenses=plan.expenses_json,
         action_plan=plan.action_plan_json,
         alfa_products=plan.alfa_products_json,
+        completed_steps_json=plan.completed_steps_json,
         competitors_count=plan.competitors_count,
     )

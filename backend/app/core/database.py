@@ -36,5 +36,6 @@ async def init_db():
 
 def _migrations() -> list[str]:
     return [
-        "ALTER TABLE business_plans ADD COLUMN competitors_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE business_plans ADD COLUMN IF NOT EXISTS completed_steps_json JSONB NOT NULL DEFAULT '[]'::jsonb;",
+        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS thread_id VARCHAR(100) NOT NULL DEFAULT 'workspace';",
     ]

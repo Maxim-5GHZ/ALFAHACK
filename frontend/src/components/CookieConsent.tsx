@@ -28,7 +28,7 @@ export default function CookieConsent() {
         </p>
         <Button
           onClick={accept}
-          size="sm"
+          size="default"
           className="shrink-0 h-8 text-xs font-semibold bg-primary hover:bg-primary-dark px-4"
         >
             Принять

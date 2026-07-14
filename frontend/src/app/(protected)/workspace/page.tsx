@@ -32,6 +32,9 @@ import {
   generatePlan,
   updatePlan,
   getPlan,
+  deleteProject,
+  deleteChatMessage,
+  getDraftReply,
   type Project,
   type ChatMessage,
   type BusinessPlan,
@@ -39,9 +42,11 @@ import {
 } from "@/lib/projects";
 
 export default function WorkspacePage() {
+  const [queryId, setQueryId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -61,7 +66,7 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     scrollChatToBottom();
-  }, [messages, scrollChatToBottom]);
+  }, [messages, localMessages, scrollChatToBottom]);
 
   useEffect(() => {
     if (!loadingMessages) {
@@ -75,15 +80,26 @@ export default function WorkspacePage() {
     try {
       const list = await getProjects();
       setProjects(list);
-      if (list.length > 0 && !selectedId) {
-        setSelectedId(list[0].id);
-        setStarted(true);
+      if (list.length > 0) {
+        if (queryId) {
+          setSelectedId(parseInt(queryId));
+          setStarted(true);
+        } else if (!selectedId) {
+          setSelectedId(list[0].id);
+          setStarted(true);
+        }
       }
     } catch {
     } finally {
       setLoadingProjects(false);
     }
-  }, [selectedId]);
+  }, [selectedId, queryId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (id) setQueryId(id);
+  }, []);
 
   useEffect(() => {
     loadProjects();
@@ -115,50 +131,66 @@ export default function WorkspacePage() {
     getPlan(selectedId)
       .then((data) => {
         setPlan(data);
-        const savedProgress = localStorage.getItem(`progress_${selectedId}`);
-        if (savedProgress) {
-          try {
-            setCompletedSteps(JSON.parse(savedProgress));
-          } catch {
-            setCompletedSteps({});
-          }
-        }
+        const stepsMap: Record<string, boolean> = {};
+        data.completed_steps_json?.forEach((step: string) => {
+          stepsMap[step] = true;
+        });
+        setCompletedSteps(stepsMap);
       })
       .catch(() => setPlan(null));
   }, [selectedId]);
 
   const handleNewProject = async () => {
+    setSelectedId(null);
+    setStarted(true);
+    setLocalMessages([]);
+    setMessages([]);
+    setPlan(null);
+    setCompletedSteps({});
+  };
+
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
+    e.stopPropagation();
+    if (!confirm("Удалить проект? Все сообщения и план будут безвозвратно удалены.")) return;
     try {
-      const project = await createProject();
-      setProjects((prev) => [project, ...prev]);
-      setSelectedId(project.id);
-      setStarted(true);
-      setMessages([]);
-      setPlan(null);
-      setCompletedSteps({});
+      await deleteProject(projectId);
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      if (selectedId === projectId) {
+        setSelectedId(null);
+        setStarted(false);
+        setMessages([]);
+        setPlan(null);
+      }
     } catch {
     }
   };
 
   const handleSend = async () => {
-    if (!input.trim() || !selectedId) return;
+    if (!input.trim()) return;
     const text = input;
     setInput("");
     setSending(true);
+
+    if (!selectedId) {
+      const userMsg: ChatMessage = { id: Date.now(), role: "user", content: text, created_at: new Date().toISOString(), thread_id: "workspace" };
+      setLocalMessages((prev) => [...prev, userMsg]);
+      try {
+        const history = localMessages.map((m) => ({ role: m.role, content: m.content }));
+        const res = await getDraftReply(history, text);
+        const aiMsg: ChatMessage = { id: Date.now() + 1, role: "ai", content: res.reply, created_at: new Date().toISOString(), thread_id: "workspace" };
+        setLocalMessages((prev) => [...prev, aiMsg]);
+      } catch {}
+      finally { setSending(false); }
+      return;
+    }
+
     try {
       const reply = await sendMessage(selectedId, text);
       setMessages((prev) => [
         ...prev,
-        { id: Date.now(), role: "user", content: text, created_at: new Date().toISOString() },
+        { id: Date.now(), role: "user", content: text, created_at: new Date().toISOString(), thread_id: "workspace" },
         reply,
       ]);
-      setProjects((prev) =>
-        prev.map((p) =>
-          p.id === selectedId
-            ? { ...p, title: p.title === "Новая идея" ? text.slice(0, 50) : p.title }
-            : p,
-        ),
-      );
     } catch {
     } finally {
       setSending(false);
@@ -166,14 +198,30 @@ export default function WorkspacePage() {
   };
 
   const handleGeneratePlan = async () => {
-    if (!selectedId) return;
     setGenerating(true);
     setPlanError(null);
+
     try {
-      const businessPlan = plan
-        ? await updatePlan(selectedId)
-        : await generatePlan(selectedId);
-      setPlan(businessPlan);
+      if (!selectedId) {
+        const project = await createProject();
+        for (const msg of localMessages) {
+          if (msg.role === "user") {
+            await sendMessage(project.id, msg.content);
+          }
+        }
+        const msgs = await getChatHistory(project.id);
+        setMessages(msgs);
+        setLocalMessages([]);
+        setSelectedId(project.id);
+        setProjects((prev) => [project, ...prev]);
+        const businessPlan = await generatePlan(project.id);
+        setPlan(businessPlan);
+      } else {
+        const businessPlan = plan
+          ? await updatePlan(selectedId)
+          : await generatePlan(selectedId);
+        setPlan(businessPlan);
+      }
     } catch (e) {
       setPlanError(e instanceof Error ? e.message : "Ошибка генерации плана");
     } finally {
@@ -181,23 +229,14 @@ export default function WorkspacePage() {
     }
   };
 
-  const toggleStep = (stepText: string) => {
-    if (!selectedId) return;
-    const updated = {
-      ...completedSteps,
-      [stepText]: !completedSteps[stepText],
-    };
-    setCompletedSteps(updated);
-    localStorage.setItem(`progress_${selectedId}`, JSON.stringify(updated));
-  };
-
   const getProgressPercentage = () => {
     if (!plan || plan.action_plan.length === 0) return 0;
-    const doneCount = plan.action_plan.filter((step) => completedSteps[step]).length;
+    const doneCount = plan.action_plan.filter((step) => plan.completed_steps_json?.includes(step)).length;
     return Math.round((doneCount / plan.action_plan.length) * 100);
   };
 
-  const userMessagesCount = messages.filter((m) => m.role === "user").length;
+  const displayMessages = selectedId ? messages : localMessages;
+  const userMessagesCount = displayMessages.filter((m) => m.role === "user").length;
   const showPlanButton = userMessagesCount >= 2 && !plan && !generating;
   const progressPercent = getProgressPercentage();
 
@@ -229,19 +268,27 @@ export default function WorkspacePage() {
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-2.5">
           {projects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => setSelectedId(project.id)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs transition-all duration-150 active:scale-[0.98]",
-                selectedId === project.id
-                  ? "bg-primary/5 text-primary font-semibold border-l-2 border-primary pl-2.5"
-                  : "text-text-primary/70 hover:bg-gray-100 hover:text-text-primary",
-              )}
-            >
-              <MessageSquare size={14} className="shrink-0 opacity-80" />
-              <span className="flex-1 truncate">{project.title}</span>
-            </button>
+            <div key={project.id} className="group relative">
+              <button
+                onClick={() => { setSelectedId(project.id); setLocalMessages([]); }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs transition-all duration-150 active:scale-[0.98]",
+                  selectedId === project.id
+                    ? "bg-primary/5 text-primary font-semibold border-l-2 border-primary pl-2.5"
+                    : "text-text-primary/70 hover:bg-gray-100 hover:text-text-primary",
+                )}
+              >
+                <MessageSquare size={14} className="shrink-0 opacity-80" />
+                <span className="flex-1 truncate">{project.title}</span>
+              </button>
+              <button
+                onClick={(e) => handleDeleteProject(e, project.id)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center justify-center h-5 w-5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Удалить проект"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              </button>
+            </div>
           ))}
         </nav>
       </aside>
@@ -279,37 +326,52 @@ export default function WorkspacePage() {
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
-                ) : messages.length === 0 ? (
+                ) : displayMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
                     <Bot size={36} className="mb-2 text-gray-300" />
                     <p className="text-xs text-gray-400">Напишите «Привет», чтобы запустить диалог</p>
                   </div>
                 ) : (
-                  messages.map((msg, i) => (
+                  displayMessages.map((msg, i) => (
                     <div
                       key={msg.id || i}
-                      className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}
+                      className={cn("group flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}
                     >
                       {msg.role === "ai" && (
                         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 shadow-sm">
                           <Bot size={15} className="text-primary" />
                         </div>
                       )}
-                      <div
-                        className={cn(
-                          "max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed transition-all shadow-sm",
-                          msg.role === "ai"
-                            ? "bg-gray-100 text-text-primary"
-                            : "bg-primary text-white font-medium",
-                        )}
-                      >
-                        {msg.role === "ai" ? (
-                          <div className="prose prose-sm max-w-none text-xs text-text-primary leading-relaxed [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-3.5 [&_ol]:list-decimal [&_ol]:pl-3.5">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                          </div>
-                        ) : (
-                          msg.content
-                        )}
+                      <div className="relative">
+                        <div
+                          className={cn(
+                            "max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed transition-all shadow-sm",
+                            msg.role === "ai"
+                              ? "bg-gray-100 text-text-primary"
+                              : "bg-primary text-white font-medium",
+                          )}
+                        >
+                          {msg.role === "ai" ? (
+                            <div className="prose prose-sm max-w-none text-xs text-text-primary leading-relaxed [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-3.5 [&_ol]:list-decimal [&_ol]:pl-3.5">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            msg.content
+                          )}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!selectedId) return;
+                            try {
+                              await deleteChatMessage(selectedId, msg.id);
+                              setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+                            } catch {}
+                          }}
+                          className="absolute -top-2 -right-2 hidden group-hover:flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 shadow-sm transition-colors"
+                          title="Удалить сообщение"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
                       </div>
                       {msg.role === "user" && (
                         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 shadow-sm">
@@ -460,26 +522,22 @@ export default function WorkspacePage() {
                           style={{ width: `${progressPercent}%` }}
                         />
                       </div>
-                      <div className="space-y-2 max-h-72 overflow-y-auto">
+                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                         {plan.action_plan.map((step, i) => {
-                          const isDone = !!completedSteps[step];
+                          const isDone = plan.completed_steps_json?.includes(step);
                           return (
                             <div
                               key={i}
-                              onClick={() => toggleStep(step)}
                               className={cn(
-                                "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-xs transition-all hover:bg-gray-50 active:scale-[0.99]",
+                                "flex items-start gap-2.5 rounded-lg border p-2.5 text-xs",
                                 isDone
                                   ? "border-accent-green/20 bg-accent-green/5 text-gray-400"
-                                  : "border-gray-200 bg-white text-text-primary",
+                                  : "border-gray-100 bg-gray-50 text-text-primary",
                               )}
                             >
-                              <input
-                                type="checkbox"
-                                checked={isDone}
-                                readOnly
-                                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary focus:ring-primary"
-                              />
+                              <div className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border", isDone ? "bg-accent-green border-accent-green text-white" : "border-gray-300 bg-white")}>
+                                {isDone && <CheckCircle size={10} />}
+                              </div>
                               <span className={cn(isDone && "line-through text-gray-400")}>{step}</span>
                             </div>
                           );

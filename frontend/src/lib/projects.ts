@@ -1,16 +1,18 @@
-import { apiGet, apiPost, apiPut } from "./api";
+import { apiGet, apiPost, apiPut, apiDelete } from "./api";
 
 export type Project = {
   id: number;
   title: string;
   industry: string | null;
   created_at: string;
+  business_plan?: BusinessPlan | null;
 };
 
 export type ChatMessage = {
   id: number;
   role: "user" | "ai";
   content: string;
+  thread_id: string;
   created_at: string;
 };
 
@@ -28,6 +30,7 @@ export type BusinessPlan = {
   expenses: ExpenseItem[];
   action_plan: string[];
   alfa_products: string[];
+  completed_steps_json: string[];
   competitors_count: number | null;
 };
 
@@ -52,8 +55,9 @@ export function getChatHistory(projectId: number): Promise<ChatMessage[]> {
 export function sendMessage(
   projectId: number,
   text: string,
+  threadId: string = "workspace"
 ): Promise<ChatMessage> {
-  return apiPost(`/api/v1/projects/${projectId}/chat`, { text }, getToken());
+  return apiPost(`/api/v1/projects/${projectId}/chat`, { text, thread_id: threadId }, getToken());
 }
 
 export function generatePlan(projectId: number): Promise<BusinessPlan> {
@@ -74,4 +78,28 @@ export function updatePlan(projectId: number): Promise<BusinessPlan> {
 
 export function getPlan(projectId: number): Promise<BusinessPlan> {
   return apiGet(`/api/v1/projects/${projectId}/plan`, getToken());
+}
+
+export function getDraftReply(messages: { role: string; content: string }[], text: string): Promise<{ reply: string }> {
+  return apiPost("/api/v1/projects/chat/draft", { messages, text }, getToken());
+}
+
+export function deleteProject(projectId: number): Promise<{ detail: string }> {
+  return apiDelete(`/api/v1/projects/${projectId}`, getToken());
+}
+
+export function deleteChatMessage(projectId: number, messageId: number): Promise<{ detail: string }> {
+  return apiDelete(`/api/v1/projects/${projectId}/messages/${messageId}`, getToken());
+}
+
+export function completePlanStep(
+  projectId: number,
+  stepText: string,
+  isCompleted: boolean
+): Promise<{ completed_steps: string[]; ai_message?: ChatMessage }> {
+  return apiPost(
+    `/api/v1/projects/${projectId}/complete-step`,
+    { step_text: stepText, is_completed: isCompleted },
+    getToken()
+  );
 }

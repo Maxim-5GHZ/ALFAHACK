@@ -349,8 +349,22 @@ class GigaChatService:
         else:
             logger.warning("GIGACHAT_API_KEY не задан, GigaChat недоступен")
 
-    async def get_chat_reply(self, history: list[dict[str, str]], username: str) -> str:
+    async def get_chat_reply(self, history: list[dict[str, str]], username: str, plan: dict | None = None) -> str:
         system_prompt = f"{SYSTEM_PROMPT_CHAT}\n\nИмя пользователя для обращения: {username}."
+
+        if plan:
+            done_steps = len(plan.get("completed_steps_json", []))
+            total_steps = len(plan.get("action_plan_json", []))
+            system_prompt += (
+                f"\n\nТЕКУЩЕЕ СОСТОЯНИЕ БИЗНЕСА (Живой контекст):\n"
+                f"- Ниша: {plan.get('niche')}\n"
+                f"- Выручка: {plan.get('monthly_revenue')} руб.\n"
+                f"- Прогресс по плану: выполнено {done_steps} из {total_steps} шагов.\n"
+                f"- Выполненные шаги: {', '.join(plan.get('completed_steps_json', []))}.\n\n"
+                f"Внимательно учитывай этот статус при ответах. Если пользователь спрашивает, что делать дальше, "
+                f"опирайся на то, какие шаги он уже сделал."
+            )
+
         try:
             if not self._giga:
                 raise ValueError("GigaChat API Key is missing")
@@ -418,6 +432,42 @@ class GigaChatService:
         except Exception:
             logger.exception("GigaChat plan generation failed or safety blocked, using adaptive fallback database")
             return fallback_data
+
+    async def generate_step_completion_message(self, step_text: str, next_step_text: str | None, username: str) -> str:
+        system_prompt = (
+            f"Ты — эмпатичный бизнес-консультант Альфа-Банка. Пользователь {username} "
+            f"только что выполнил шаг своего бизнес-плана: '{step_text}'.\n"
+            f"Твоя задача:\n"
+            f"1. Поздравить его и похвалить (коротко, 1-2 предложения, используй эмодзи).\n"
+        )
+
+        if next_step_text:
+            system_prompt += (
+                f"2. Сказать, что следующий шаг — это '{next_step_text}'.\n"
+                f"3. Кратко и понятно (для новичка) объяснить, как это сделать. Если уместно, "
+                f"упомяни продукты Альфа-Банка, которые могут помочь на этом этапе."
+            )
+        else:
+            system_prompt += "2. Сказать, что все шаги плана выполнены, и пожелать удачи в бизнесе!"
+
+        try:
+            if not self._giga:
+                raise ValueError("GigaChat API Key is missing")
+
+            messages = [Messages(role=MessagesRole.SYSTEM, content=system_prompt)]
+            payload = Chat(messages=messages)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, self._giga.chat, payload)
+            reply = response.choices[0].message.content
+
+            if _is_safety_block(reply):
+                raise ValueError("Safety block")
+            return reply
+        except Exception:
+            logger.exception("Failed to generate step completion message")
+            if next_step_text:
+                return f"Супер, {username}! Шаг «{step_text}» выполнен ✅. Переходим к следующему: «{next_step_text}». Альфа-Банк всегда рядом, чтобы помочь с этим!"
+            return f"Поздравляю, {username}! Все шаги выполнены. Успешного бизнеса! 🚀"
 
     async def _do_gigachat_call(self, history: list[dict[str, str]], system_prompt: str) -> str:
         messages = [Messages(role=MessagesRole.SYSTEM, content=system_prompt)]
