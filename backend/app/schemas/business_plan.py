@@ -1,13 +1,6 @@
 from pydantic import BaseModel
 
 
-class BusinessPlanRequest(BaseModel):
-    niche: str | None = None
-    budget: float | None = None
-    city: str | None = None
-    experience: str | None = None
-
-
 class ExpenseItem(BaseModel):
     name: str
     amount: float
@@ -21,3 +14,6 @@ class BusinessPlanResponse(BaseModel):
     payback_months: int
     expenses: list[ExpenseItem]
     action_plan: list[str]
+    alfa_products: list[str]
+
+    model_config = {"from_attributes": True}

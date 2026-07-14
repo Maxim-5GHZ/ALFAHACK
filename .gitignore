@@ -36,3 +36,5 @@ Thumbs.db
 backend/.env
 frontend/.env
 *.db
+get.sh
+all.txt
