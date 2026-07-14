@@ -24,5 +24,7 @@ class Settings(BaseSettings):
     GIGACHAT_API_KEY: str = ""
     GIGACHAT_CREDENTIALS_PATH: str = ""
 
+    YANDEX_MAPS_API_KEY: str = ""
+
 
 settings = Settings()

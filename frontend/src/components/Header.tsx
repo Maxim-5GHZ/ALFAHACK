@@ -48,6 +48,7 @@ export default function Header() {
     localStorage.removeItem("token");
     setUser(null);
     setMenuOpen(false);
+    window.location.href = "/";
   };
 
   return (

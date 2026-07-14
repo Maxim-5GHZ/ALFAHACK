@@ -20,5 +20,6 @@ class BusinessPlan(Base):
     expenses_json: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
     action_plan_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     alfa_products_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    competitors_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     project: Mapped["Project"] = relationship(back_populates="business_plan")  # noqa: F821

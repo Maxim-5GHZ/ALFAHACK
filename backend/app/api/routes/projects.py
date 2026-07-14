@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +14,12 @@ from app.schemas.chat import ChatMessageCreate, ChatMessageResponse
 from app.schemas.business_plan import BusinessPlanResponse
 from app.api.routes.auth import get_current_user
 from app.services.gigachat_service import GigaChatService
+from app.services.yandex_maps_service import YandexMapsService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 gigachat = GigaChatService()
+yandex_maps = YandexMapsService()
 
 
 @router.get("", response_model=list[ProjectResponse])
@@ -128,6 +131,27 @@ async def generate_plan(
         for m in history_result.scalars().all()
     ]
 
+    user_text_block = " ".join([m["content"] for m in history if m["role"] == "user"])
+
+    city = "Казань"
+    city_match = re.search(r"(в|из|по)\s+([А-Я][а-я\-]+)", user_text_block)
+    if city_match:
+        city = city_match.group(2)
+    elif "калуг" in user_text_block.lower():
+        city = "Калуга"
+    elif "москв" in user_text_block.lower():
+        city = "Москва"
+    elif "питер" in user_text_block.lower() or "спб" in user_text_block.lower():
+        city = "Санкт-Петербург"
+
+    niche_query = "кофейня"
+    if any(k in user_text_block.lower() for k in ["маникюр", "ногти", "бьюти", "салон"]):
+        niche_query = "салон красоты"
+    elif any(k in user_text_block.lower() for k in ["одежд", "шоп", "магазин"]):
+        niche_query = "магазин одежды"
+
+    competitors_count = await yandex_maps.get_competitor_count(niche_query, city)
+
     data = await gigachat.generate_business_plan_json(history, current_user.username)
 
     plan = BusinessPlan(
@@ -140,6 +164,7 @@ async def generate_plan(
         expenses_json=data.get("expenses", []),
         action_plan_json=data.get("action_plan", []),
         alfa_products_json=data.get("alfa_products", []),
+        competitors_count=competitors_count,
     )
     db.add(plan)
     await db.commit()
@@ -185,4 +210,5 @@ def _plan_to_response(plan: BusinessPlan) -> BusinessPlanResponse:
         expenses=plan.expenses_json,
         action_plan=plan.action_plan_json,
         alfa_products=plan.alfa_products_json,
+        competitors_count=plan.competitors_count,
     )

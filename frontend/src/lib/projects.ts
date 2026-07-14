@@ -28,6 +28,7 @@ export type BusinessPlan = {
   expenses: ExpenseItem[];
   action_plan: string[];
   alfa_products: string[];
+  competitors_count: number | null;
 };
 
 function getToken(): string {

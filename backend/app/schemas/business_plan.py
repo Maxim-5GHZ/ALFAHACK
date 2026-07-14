@@ -15,5 +15,6 @@ class BusinessPlanResponse(BaseModel):
     expenses: list[ExpenseItem]
     action_plan: list[str]
     alfa_products: list[str]
+    competitors_count: int | None = 0
 
     model_config = {"from_attributes": True}
