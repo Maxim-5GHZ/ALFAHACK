@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Alfa.Start API"
     VERSION: str = "0.1.0"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = ["*"]
 
     OPENAI_API_KEY: str = ""
     OPENAI_API_BASE: str = "https://api.openai.com/v1"

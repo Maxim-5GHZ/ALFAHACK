@@ -1,8 +1,16 @@
 services:
+  caddy:
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend/app:/app/app
 
@@ -10,6 +18,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost
+    command: >
+      sh -c "sed -i 's/const blockCrossSite = (req\, res\, allowedDevOrigins\, hostname)=>{/const blockCrossSite = (req\, res\, allowedDevOrigins\, hostname)=>{ return false;/' /app/node_modules/next/dist/server/lib/router-utils/block-cross-site.js && npm run dev -- --hostname 0.0.0.0"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ""
     volumes:
+      - ./frontend/next.config.mjs:/app/next.config.mjs
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public

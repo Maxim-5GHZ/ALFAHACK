@@ -10,11 +10,11 @@ from app.models.project import Project
 from app.models.chat import ChatMessage
 from app.models.plan import BusinessPlan
 from app.models.user import User
-from app.schemas.project import ProjectResponse
+from app.schemas.project import ProjectResponse, ProjectUpdate
 from app.schemas.chat import ChatMessageCreate, ChatMessageResponse
 from app.schemas.business_plan import BusinessPlanResponse
 from app.api.routes.auth import get_current_user
-from app.services.gigachat_service import GigaChatService
+from app.services.gigachat_service import GigaChatService, _extract_city, _extract_budget, _detect_niche
 from app.services.yandex_maps_service import YandexMapsService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -80,6 +80,31 @@ async def create_project(
     return result.scalar_one()
 
 
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: int,
+    body: ProjectUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_user_project(project_id, current_user.id, db)
+
+    if body.title is not None:
+        project.title = body.title
+    if body.industry is not None:
+        project.industry = body.industry
+
+    await db.commit()
+    await db.refresh(project)
+
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.business_plan))
+        .where(Project.id == project.id)
+    )
+    return result.scalar_one()
+
+
 @router.get("/{project_id}/messages", response_model=list[ChatMessageResponse])
 async def get_messages(
     project_id: int,
@@ -109,15 +134,11 @@ async def chat(
     await db.commit()
     await db.refresh(user_msg)
 
-    history_result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.project_id == project.id, ChatMessage.thread_id == body.thread_id)
-        .order_by(ChatMessage.created_at.asc())
+    all_user_result = await db.execute(
+        select(ChatMessage.content)
+        .where(ChatMessage.project_id == project.id, ChatMessage.role == "user")
     )
-    history = [
-        {"role": m.role, "content": m.content}
-        for m in history_result.scalars().all()
-    ]
+    all_user_texts = [row[0] for row in all_user_result.all()]
 
     plan_result = await db.execute(select(BusinessPlan).where(BusinessPlan.project_id == project.id))
     plan_obj = plan_result.scalar_one_or_none()
@@ -128,7 +149,31 @@ async def chat(
         "action_plan_json": plan_obj.action_plan_json
     } if plan_obj else None
 
-    reply = await gigachat.get_chat_reply(history, current_user.username, plan_data)
+    project_summary = _build_chat_summary(all_user_texts, plan_data)
+    project.chat_summary_json = project_summary
+    await db.commit()
+
+    agent_role = "general"
+    if body.thread_id.startswith("thread_financier"):
+        agent_role = "financier"
+    elif body.thread_id.startswith("thread_marketer"):
+        agent_role = "marketer"
+    elif body.thread_id.startswith("thread_accountant"):
+        agent_role = "accountant"
+    elif body.thread_id.startswith("thread_lawyer"):
+        agent_role = "lawyer"
+
+    history_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.project_id == project.id, ChatMessage.thread_id == body.thread_id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in history_result.scalars().all()
+    ]
+
+    reply = await gigachat.get_chat_reply(history, current_user.username, plan_data, agent_role=agent_role, project_summary=project_summary)
 
     ai_msg = ChatMessage(project_id=project.id, role="ai", content=reply, thread_id=body.thread_id)
     db.add(ai_msg)
@@ -406,6 +451,22 @@ async def _get_user_project(project_id: int, user_id: int, db: AsyncSession) -> 
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
+
+
+def _build_chat_summary(all_user_texts: list[str], plan_data: dict | None) -> dict:
+    full_text = " ".join(all_user_texts)
+    city = _extract_city(full_text) if full_text else None
+    budget = _extract_budget(full_text) if full_text else None
+    _, niche_tags = _detect_niche(full_text) if full_text else (None, [])
+    pain_keywords = ["налог", "бухгалтер", "опыт", "страх", "партнер", "деньг", "аренд", "помещен", "реклам", "продвижен"]
+    pains = [k for k in pain_keywords if k in full_text.lower()] if full_text else []
+    return {
+        "city": city or "не определён",
+        "budget": budget,
+        "niche_tags": niche_tags or [],
+        "pains": pains,
+        "total_user_messages": len(all_user_texts),
+    }
 
 
 def _plan_to_response(plan: BusinessPlan) -> BusinessPlanResponse:

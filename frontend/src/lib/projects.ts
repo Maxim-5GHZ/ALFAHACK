@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./api";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "./api";
 
 export type Project = {
   id: number;
@@ -82,6 +82,10 @@ export function getPlan(projectId: number): Promise<BusinessPlan> {
 
 export function getDraftReply(messages: { role: string; content: string }[], text: string): Promise<{ reply: string }> {
   return apiPost("/api/v1/projects/chat/draft", { messages, text }, getToken());
+}
+
+export function updateProject(projectId: number, data: { title?: string; industry?: string }): Promise<Project> {
+  return apiPatch(`/api/v1/projects/${projectId}`, data, getToken());
 }
 
 export function deleteProject(projectId: number): Promise<{ detail: string }> {

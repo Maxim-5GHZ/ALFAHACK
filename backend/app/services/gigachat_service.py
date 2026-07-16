@@ -9,28 +9,9 @@ from gigachat import GigaChat
 from gigachat.models import Chat, Messages, MessagesRole
 
 from app.core.config import settings
+from app.core.prompts import SYSTEM_PROMPTS
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT_CHAT = (
-    "Ты — эмпатичный цифровой бизнес-консультант Альфа-Банка для молодежи (17-25 лет).\n"
-    "Твоя цель — помочь пользователю преодолеть страхи запуска бизнеса, выявить его скрытые боли и барьеры.\n\n"
-    "Правила ведения диалога:\n"
-    "1. Обязательно обращайся к пользователю по имени, которое передано в контексте.\n"
-    "2. Не засыпай вопросами сразу! Веди диалог плавно. Выясни:\n"
-    "   - Какую сферу или идею хочет запустить пользователь (HoReCa, Beauty, Retail или др.).\n"
-    "   - Что его больше всего пугает или останавливает (налоги, поиск клиентов, нехватка денег, оформление документов).\n"
-    "   - Где он планирует открываться (город).\n"
-    "   - Какой у него стартовый бюджет.\n"
-    "3. Позиционируй Альфа-Банк как заботливого друга, снимающего рутину:\n"
-    "   - Если у пользователя СТРАХ НАЛОГОВ: расскажи про наш «Умный Налоговый Автопилот» (банк сам отложит налог с каждого перевода, спи спокойно).\n"
-    "   - Если у пользователя НЕТ ОПЫТА В БУХГАЛТЕРИИ: напомни, что Альфа-Банк регистрирует ИП онлайн бесплатно и берет бухгалтерию на себя.\n"
-    "   - Если у пользователя СТРАХ ДЕЛИТЬ ДЕНЬГИ С ПАРТНЕРОМ: презентуй «Альфа.Тандем» (автоматический сплит доходов со счетов терминалов).\n"
-    "   - Если у пользователя ОБЪЕКТИВНО МАЛО ДЕНЕГ (менее 50 000 руб.): деликатно намекни на возможность льготного стартап-кредита или молодежного овердрафта со ставкой от 4.5% на первые закупки.\n"
-    "4. Говори на понятном молодежном языке, но без лишнего сленга. Используй эмодзи для дружелюбия.\n"
-    "5. Объясни, что мы также анализируем рынок: подтягиваем количество реальных конкурентов через Яндекс.Карты и цены аренды/оборудования с Авито.\n"
-    "6. Когда базовая картина ясна, предложи пользователю кликнуть на кнопку «Сгенерировать бизнес-план» в левой панели экрана, чтобы запустить расчет."
-)
 
 SYSTEM_PROMPT_PLAN = (
     "На основе истории диалога сгенерируй JSON бизнес-плана. "
@@ -349,8 +330,31 @@ class GigaChatService:
         else:
             logger.warning("GIGACHAT_API_KEY не задан, GigaChat недоступен")
 
-    async def get_chat_reply(self, history: list[dict[str, str]], username: str, plan: dict | None = None) -> str:
-        system_prompt = f"{SYSTEM_PROMPT_CHAT}\n\nИмя пользователя для обращения: {username}."
+    async def get_chat_reply(
+        self,
+        history: list[dict[str, str]],
+        username: str,
+        plan: dict | None = None,
+        agent_role: str = "general",
+        project_summary: dict | None = None
+    ) -> str:
+        base_prompt = SYSTEM_PROMPTS.get(agent_role, SYSTEM_PROMPTS["general"])
+        system_prompt = f"{base_prompt}\n\nИмя пользователя для обращения: {username}."
+
+        if project_summary and project_summary.get("total_user_messages", 0) > 1:
+            parts = ["\n\nСВОДКА ПО ПРОЕКТУ (из диалога):"]
+            if project_summary.get("city"):
+                parts.append(f"- Город: {project_summary['city']}")
+            if project_summary.get("budget"):
+                parts.append(f"- Бюджет: ~{project_summary['budget']:,} руб.")
+            if project_summary.get("niche_tags"):
+                parts.append(f"- Сфера: {', '.join(project_summary['niche_tags'])}")
+            if project_summary.get("pains"):
+                pain_labels = {"налог": "страх налогов", "бухгалтер": "бухгалтерия", "опыт": "нехватка опыта", "страх": "страхи", "партнер": "партнёрство", "деньг": "финансы", "аренд": "аренда", "помещен": "помещение", "реклам": "реклама", "продвижен": "продвижение"}
+                pains = [pain_labels.get(p, p) for p in project_summary["pains"]]
+                parts.append(f"- Ключевые боли: {', '.join(set(pains))}")
+            parts.append(f"- Всего сообщений в диалоге: {project_summary['total_user_messages']}")
+            system_prompt += "\n".join(parts)
 
         if plan:
             done_steps = len(plan.get("completed_steps_json", []))
@@ -377,44 +381,33 @@ class GigaChatService:
             return reply
         except Exception:
             logger.exception("GigaChat call failed or safety blocked, generating adaptive fallback response")
+            return self._get_fallback_by_role(agent_role, username)
 
-            fallback_data = _get_fallback_plan_by_history(history)
-            user_input = " ".join([m.get("content", "").lower() for m in history if m.get("role") == "user"])
-
-            extracted_city = "твоем городе"
-            niche_title = fallback_data["niche"]
-
-            city_match = re.search(r"(в|из|по)\s+([А-Я][а-я\-]+)", user_input)
-            if city_match:
-                extracted_city = city_match.group(2)
-            elif "калуг" in user_input:
-                extracted_city = "Калуге"
-
-            if any(k in user_input for k in ["кошач", "котокаф", "котик", "кошка"]):
-                niche_title = "Котокафе"
-            elif any(k in user_input for k in ["маникюр", "ногти", "ногот", "бьюти"]):
-                niche_title = "Бьюти-студию"
-
-            budget_is_low = False
-            budget_digits = [int(s) for s in re.findall(r'\b\d+\b', user_input)]
-            if any(0 < d < 50000 for d in budget_digits):
-                budget_is_low = True
-
-            credit_block = ""
-            if budget_is_low:
-                credit_block = (
-                    "• **Поддержка малого бюджета:** Если свободных средств пока немного, Альфа-Банк "
-                    "предлагает беспроцентный стартап-овердрафт или льготный молодежный кредит от 4.5% годовых, чтобы ты мог уверенно начать.\n"
-                )
-
+    def _get_fallback_by_role(self, agent_role: str, username: str) -> str:
+        if agent_role == "financier":
             return (
-                f"Ого, {username}! Твоя идея открыть «{niche_title}» в г. {extracted_city} — это действительно классный выбор! 🚀✨\n\n"
-                f"Давай проработаем ее вместе, учитывая возможные барьеры:\n"
-                f"{credit_block}"
-                f"• **Налоги и отчетность:** С нашим бесплатным **«Налоговым Автопилотом»** тебе не нужно нанимать бухгалтера. Сервис автоматически отложит процент с каждого СБП-платежа.\n"
-                f"• **Партнерские отношения:** Планируешь вести дело с другом? **«Альфа.Тандем»** разделит доходы бесконфликтно и прозрачно прямо на ваши счета.\n\n"
-                f"Я уже анализирую рынок твоего города. Когда будешь готов увидеть детальную финансовую структуру, нажми кнопку **«Сгенерировать бизнес-план»** на панели слева!"
+                f"Привет, {username}! Я твой финансовый консультант. Похоже, у меня возникли трудности со связью, "
+                f"но я готов помочь тебе посчитать окупаемость и настроить льготный стартап-овердрафт от 4.5% в Альфа-Банке. Давай продолжим диалог!"
             )
+        elif agent_role == "marketer":
+            return (
+                f"Салют, {username}! Я на связи. Сгенерируем идеи для продвижения и настроим Альфа-Pay "
+                f"для приема бесконтактной оплаты по QR-кодам, чтобы твои клиенты могли платить в одно касание!"
+            )
+        elif agent_role == "accountant":
+            return (
+                f"Привет, {username}! Не переживай насчет налогов. Даже в режиме офлайн я напомню, "
+                f"что наш «Умный Налоговый Автопилот» сам отложит нужную сумму с каждого платежа. Все под контролем!"
+            )
+        elif agent_role == "lawyer":
+            return (
+                f"Здравствуйте, {username}! Я помогу тебе разобраться с договорами и зарегистрировать ИП "
+                f"онлайн бесплатно. Безопасность твоего бизнеса — мой приоритет!"
+            )
+        return (
+            f"Привет, {username}! Я твой бизнес-ассистент Альфа-Банка. Наша система сейчас обновляется, "
+            f"но я всегда готов ответить на твои вопросы о запуске своего дела!"
+        )
 
     async def generate_business_plan_json(self, history: list[dict[str, str]], username: str) -> dict[str, Any]:
         fallback_data = _get_fallback_plan_by_history(history)

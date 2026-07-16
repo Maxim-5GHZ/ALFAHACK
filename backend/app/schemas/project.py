@@ -9,6 +9,11 @@ class ProjectCreate(BaseModel):
     pass
 
 
+class ProjectUpdate(BaseModel):
+    title: str | None = None
+    industry: str | None = None
+
+
 class ProjectResponse(BaseModel):
     id: int
     title: str

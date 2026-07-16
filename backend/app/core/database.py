@@ -38,4 +38,5 @@ def _migrations() -> list[str]:
     return [
         "ALTER TABLE business_plans ADD COLUMN IF NOT EXISTS completed_steps_json JSONB NOT NULL DEFAULT '[]'::jsonb;",
         "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS thread_id VARCHAR(100) NOT NULL DEFAULT 'workspace';",
+        "ALTER TABLE projects ADD COLUMN IF NOT EXISTS chat_summary_json JSONB NOT NULL DEFAULT '{}'::jsonb;",
     ]
