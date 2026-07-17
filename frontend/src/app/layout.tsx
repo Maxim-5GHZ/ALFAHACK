@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   description: "Интерактивный помощник для молодых предпринимателей",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -16,9 +22,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body>
+      <body className="flex min-h-screen flex-col">
         <Header />
-        <main className="pt-14 md:pt-16">{children}</main>
+        <main className="flex-1 pt-14 md:pt-16">{children}</main>
         <Footer />
         <CookieConsent />
       </body>
