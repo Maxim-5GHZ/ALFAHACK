@@ -20,7 +20,9 @@
 │   │   └── lib/
 │   ├── Dockerfile          # Production (multi-stage, standalone)
 │   └── Dockerfile.dev      # Dev сборка (HMR)
-├── Caddyfile               # Конфигурация Caddy (reverse proxy)
+├── caddy-entrypoint.sh     # Автовыбор HTTP/HTTPS в зависимости от CADDY_HOST
+├── Caddyfile.dev            # Конфигурация Caddy для разработки (HTTP)
+├── Caddyfile.tls            # Шаблон Caddy для прода с TLS (референс)
 ├── .env.example            # Все переменные окружения
 ├── .gitignore
 ├── docker-compose.yml      # Production
@@ -40,13 +42,15 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- **Caddy (reverse proxy):** `localhost:80` / `localhost:443`
+- **Caddy (reverse proxy):** `localhost:80` (или `your.domain:443` c TLS)
   - `/api/*` → Backend (FastAPI)
   - `/health` → Backend
   - `/*` → Frontend (Next.js)
 - PostgreSQL: `localhost:5432`
 
-> **Важно:** Для Production укажите `CADDY_HOST=your-domain.com` в `.env`. Caddy автоматически выпустит SSL-сертификаты через Let's Encrypt.
+> **Важно:** Если `CADDY_HOST` — реальный домен (не `localhost` и не IP),  
+> Caddy автоматически включит HTTPS с Let's Encrypt. Укажите `CADDY_TLS_EMAIL` в `.env`.  
+> Если домена нет — Caddy работает по plain HTTP на порту 80.
 
 ### Development (с hot reload)
 
@@ -86,6 +90,7 @@ npm run dev
 | Переменная                 | Описание                          | По умолчанию                                       |
 |----------------------------|-----------------------------------|---------------------------------------------------|
 | `CADDY_HOST`               | Домен для Caddy                   | `localhost`                                       |
+| `CADDY_TLS_EMAIL`          | Email для Let's Encrypt (опционально) | — (plain HTTP если нет домена)               |
 | `OPENAI_API_KEY`           | Ключ OpenAI API                   | —                                                 |
 | `OPENAI_API_BASE`          | Базовый URL OpenAI API            | `https://api.openai.com/v1`                       |
 | `LLM_MODEL`                | Модель LLM                        | `gpt-4o-mini`                                     |

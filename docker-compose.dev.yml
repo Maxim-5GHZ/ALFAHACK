@@ -2,6 +2,7 @@ services:
   caddy:
     ports:
       - "80:80"
+    entrypoint: ["/usr/bin/caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile
 

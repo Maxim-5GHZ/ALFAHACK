@@ -5,11 +5,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy-entrypoint.sh:/entrypoint.sh
       - caddy_data:/data
       - caddy_config:/config
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     environment:
       - CADDY_HOST=${CADDY_HOST:-localhost}
+      - CADDY_TLS_EMAIL=${CADDY_TLS_EMAIL:-}
     depends_on:
       - backend
       - frontend

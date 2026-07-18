@@ -4,18 +4,17 @@
 }
 
 {$CADDY_HOST:localhost} {
-    # Logging
+    tls {$CADDY_TLS_EMAIL:internal}
+
     log {
         output file /data/caddy/logs/access.log
     }
 
-    # Reverse proxy to backend (API + health)
     @backend {
         path /api/*
         path /health
     }
     reverse_proxy @backend backend:8000
 
-    # Reverse proxy to frontend (Next.js)
     reverse_proxy frontend:3000
 }
