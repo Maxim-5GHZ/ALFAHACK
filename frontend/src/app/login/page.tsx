@@ -66,7 +66,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-gray-50 px-4 md:min-h-[calc(100dvh-4rem)]">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-text-primary">Альфа.Старт</h1>

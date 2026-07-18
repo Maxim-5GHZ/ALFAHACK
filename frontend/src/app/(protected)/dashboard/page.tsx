@@ -142,20 +142,20 @@ function DashboardContent() {
     else if (progress >= 30) { stageIcon = "🏪"; bgColor = "bg-blue-100"; color = "text-blue-500"; stageName = "Первые шаги"; fillColor = "bg-blue-500"; }
 
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6 h-[calc(100vh-4rem)] flex flex-col">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary transition-colors mb-4">
+      <div className="mx-auto max-w-6xl px-3 md:px-4 py-4 md:py-6 min-h-[calc(100vh-4rem)] flex flex-col">
+        <Link href="/dashboard" className="inline-flex w-fit items-center gap-1.5 text-xs text-gray-400 hover:text-primary transition-colors mb-4 bg-white py-1.5 px-3 rounded-full border border-gray-100 shadow-sm">
           <ArrowLeft size={14} /> Назад к списку бизнесов
         </Link>
 
-        <div className="shrink-0 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm mb-6 flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
+        <div className="shrink-0 rounded-3xl border border-gray-200 bg-white p-4 md:p-6 shadow-sm mb-4 md:mb-6 flex flex-col md:flex-row items-center gap-4 md:gap-6 relative overflow-hidden">
           <div className={cn("absolute right-0 top-0 h-64 w-64 -translate-y-20 translate-x-20 rounded-full opacity-20 blur-3xl", bgColor)} />
 
           <div className={cn("flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl text-6xl shadow-inner relative z-10", bgColor)}>
             {stageIcon}
           </div>
 
-          <div className="flex-1 relative z-10 w-full text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
+          <div className="flex-1 relative z-10 w-full text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-start gap-2 sm:gap-3 mb-2">
               <div className="flex items-center gap-2">
                 {editingTitle ? (
                   <input
@@ -168,7 +168,7 @@ function DashboardContent() {
                   />
                 ) : (
                   <h1
-                    className="text-2xl font-bold text-text-primary cursor-pointer group/title"
+                    className="text-xl md:text-2xl font-bold text-text-primary cursor-pointer group/title"
                     onClick={() => { setEditTitleValue(activeProject.title); setEditingTitle(true); }}
                   >
                     {activeProject.title === "Новая идея" ? "Безымянный бизнес" : activeProject.title}
@@ -180,9 +180,9 @@ function DashboardContent() {
                 <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider", bgColor, color)}>{stageName}</span>
               </div>
             </div>
-            <p className="text-sm text-gray-500 mb-4">{plan?.niche || "Бизнес-план формируется..."}</p>
+            <p className="text-xs md:text-sm text-gray-500 mb-4">{plan?.niche || "Бизнес-план формируется..."}</p>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
                 <div className="flex justify-between text-xs font-bold mb-1.5">
                   <span className="text-gray-500">Уровень прокачки бизнеса</span>
@@ -192,7 +192,7 @@ function DashboardContent() {
                   <div className={cn("h-full transition-all duration-1000", fillColor)} style={{ width: `${progress}%` }} />
                 </div>
               </div>
-              <div className="hidden md:flex gap-4 pl-4 border-l border-gray-100">
+              <div className="flex gap-4 sm:pl-4 sm:border-l border-gray-100 pt-3 sm:pt-0 border-t sm:border-t-0">
                  <div>
                     <span className="block text-[10px] text-gray-400 font-medium">Потенциал выручки</span>
                     <span className="flex items-center gap-1 text-sm font-bold text-text-primary">
@@ -205,8 +205,8 @@ function DashboardContent() {
           </div>
         </div>
 
-        <div className="flex flex-1 gap-6 min-h-0 flex-col lg:flex-row">
-          <div className="flex-1 flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden min-w-[340px]">
+        <div className="flex flex-1 flex-col lg:flex-row gap-4 md:gap-6 min-h-0">
+          <div className="w-full lg:flex-1 flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden h-[400px] lg:h-auto">
             <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
                <Gamepad2 size={18} className="text-primary" />
                <h3 className="font-bold text-text-primary">Игровой чек-лист (План действий)</h3>
@@ -237,7 +237,7 @@ function DashboardContent() {
             </div>
           </div>
 
-          <div className="w-full lg:w-[450px] flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0 min-w-[340px]">
+          <div className="w-full lg:w-[450px] flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0 h-[500px] lg:h-auto">
 
             <div className="flex border-b border-gray-100">
               <button
@@ -408,7 +408,7 @@ function DashboardContent() {
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col items-center px-4 py-8">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col items-center px-4 py-6 md:py-8">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-text-primary flex items-center justify-center gap-2">
           <Gamepad2 className="text-primary" />
@@ -425,7 +425,7 @@ function DashboardContent() {
           <Button onClick={handleCreate} className="mt-6 bg-primary hover:bg-primary-dark shadow-md">Заложить идею</Button>
         </div>
       ) : (
-        <div className="flex w-full flex-wrap justify-center gap-6">
+        <div className="flex w-full flex-col sm:flex-row sm:flex-wrap justify-center gap-4 md:gap-6">
           {projects.map((p) => {
             const plan = p.business_plan;
             const totalSteps = plan?.action_plan?.length || 0;
@@ -441,7 +441,7 @@ function DashboardContent() {
             }
 
             return (
-              <div key={p.id} className="group relative flex w-full max-w-sm flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-xl hover:-translate-y-1">
+              <div key={p.id} className="group relative flex w-full sm:max-w-sm flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-xl hover:-translate-y-1">
                 <div className={cn("absolute right-0 top-0 h-32 w-32 -translate-y-10 translate-x-10 rounded-full opacity-20 blur-3xl", bgColor)} />
                 <div className="p-6 pb-5 flex-1 relative z-10">
                   <div className="flex justify-between items-start mb-4">
@@ -490,7 +490,7 @@ function DashboardContent() {
                   )}
                 </div>
                 <div className="border-t border-gray-50 bg-gray-50/50 p-3 relative z-10">
-                  <Link href={plan ? `/dashboard?id=${p.id}` : `/workspace?id=${p.id}`} className="block w-full">
+                  <Link href={plan ? `/dashboard?id=${p.id}` : `/workspace?id=${p.id}&openPlan=true`} className="block w-full">
                     <Button variant="outline" className="w-full justify-between bg-white text-xs font-bold border-gray-200 hover:border-primary hover:text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                       {plan ? "Перейти к управлению бизнесом" : "Перейти к созданию плана"}
                       <ArrowRight size={14} />

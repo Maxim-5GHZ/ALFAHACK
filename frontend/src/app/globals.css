@@ -6,3 +6,9 @@ body {
   color: #0b1f35;
   background: #ffffff;
 }
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
