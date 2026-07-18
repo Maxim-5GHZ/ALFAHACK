@@ -30,6 +30,7 @@ function DashboardContent() {
   const [editTitleValue, setEditTitleValue] = useState("");
 
   const chatRef = useRef<HTMLDivElement>(null);
+  const feedSectionRef = useRef<HTMLDivElement>(null);
 
   const handleSaveTitle = async (projectId: number) => {
     const trimmed = editTitleValue.trim();
@@ -86,7 +87,16 @@ function DashboardContent() {
     const isNowCompleted = !completedSteps[stepText];
 
     setCompletedSteps(prev => ({ ...prev, [stepText]: isNowCompleted }));
-    if (isNowCompleted) setStepLoading(true);
+    if (isNowCompleted) {
+      setStepLoading(true);
+      setActiveTab("feed");
+
+      setTimeout(() => {
+        if (window.innerWidth < 1024) {
+          feedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 500);
+    }
 
     try {
       const res = await completePlanStep(activeProject.id, stepText, isNowCompleted);
@@ -234,7 +244,7 @@ function DashboardContent() {
             </div>
           </div>
 
-          <div className="w-full lg:w-[450px] flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0 h-[500px] lg:h-auto">
+          <div ref={feedSectionRef} className="w-full lg:w-[450px] flex flex-col rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0 h-[500px] lg:h-auto">
 
             <div className="flex border-b border-gray-100">
               <button
