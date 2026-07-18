@@ -10,7 +10,7 @@ from app.models.project import Project
 from app.models.chat import ChatMessage
 from app.models.plan import BusinessPlan
 from app.models.user import User
-from app.schemas.project import ProjectResponse, ProjectUpdate
+from app.schemas.project import ProjectResponse, ProjectUpdate, ProjectFromDraftRequest
 from app.schemas.chat import ChatMessageCreate, ChatMessageResponse
 from app.schemas.business_plan import BusinessPlanResponse
 from app.api.routes.auth import get_current_user
@@ -70,6 +70,40 @@ async def create_project(
     welcome = await gigachat.get_chat_reply([], current_user.username)
     welcome_msg = ChatMessage(project_id=project.id, role="ai", content=welcome, thread_id="workspace")
     db.add(welcome_msg)
+    await db.commit()
+
+    result = await db.execute(
+        select(Project)
+        .options(selectinload(Project.business_plan))
+        .where(Project.id == project.id)
+    )
+    return result.scalar_one()
+
+
+@router.post("/from-draft", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def create_project_from_draft(
+    body: ProjectFromDraftRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = Project(user_id=current_user.id, title=body.title)
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+
+    for msg in body.messages:
+        db_msg = ChatMessage(
+            project_id=project.id,
+            role=msg.role,
+            content=msg.content,
+            thread_id="workspace"
+        )
+        db.add(db_msg)
+
+    all_user_texts = [m.content for m in body.messages if m.role == "user"]
+    project_summary = _build_chat_summary(all_user_texts, None)
+    project.chat_summary_json = project_summary
+
     await db.commit()
 
     result = await db.execute(

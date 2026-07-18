@@ -92,6 +92,10 @@ export function deleteProject(projectId: number): Promise<{ detail: string }> {
   return apiDelete(`/api/v1/projects/${projectId}`, getToken());
 }
 
+export function createProjectFromDraft(title: string, messages: {role: string, content: string}[]): Promise<Project> {
+  return apiPost("/api/v1/projects/from-draft", { title, messages }, getToken());
+}
+
 export function deleteChatMessage(projectId: number, messageId: number): Promise<{ detail: string }> {
   return apiDelete(`/api/v1/projects/${projectId}/messages/${messageId}`, getToken());
 }

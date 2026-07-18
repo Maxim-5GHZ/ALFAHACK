@@ -77,11 +77,8 @@ function DashboardContent() {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, sending, stepLoading]);
 
-  const handleCreate = async () => {
-    try {
-      const p = await createProject();
-      router.push(`/workspace?id=${p.id}`);
-    } catch (e) {}
+  const handleCreate = () => {
+    router.push(`/workspace`);
   };
 
   const toggleStep = async (stepText: string) => {

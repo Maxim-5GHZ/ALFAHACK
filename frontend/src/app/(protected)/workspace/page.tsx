@@ -7,18 +7,16 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  getProjects, createProject, getChatHistory, sendMessage, generatePlan,
-  updatePlan, getPlan, deleteProject, getDraftReply,
+  getProjects, getChatHistory, sendMessage, generatePlan,
+  updatePlan, getPlan, deleteProject, getDraftReply, createProjectFromDraft,
   type Project, type ChatMessage, type BusinessPlan
 } from "@/lib/projects";
 
-// ==========================================
-// ОСНОВНОЙ КОМПОНЕНТ СТРАНИЦЫ
-// ==========================================
 export default function WorkspacePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -31,6 +29,8 @@ export default function WorkspacePage() {
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [started, setStarted] = useState(false);
+  
+  const skipFetchRef = useRef(false);
   
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [mobilePlanOpen, setMobilePlanOpen] = useState(false);
@@ -49,6 +49,8 @@ export default function WorkspacePage() {
         setSelectedId(targetId);
         setStarted(true);
         if (shouldOpenPlan) setMobilePlanOpen(true);
+      } else {
+        setStarted(false);
       }
       setLoadingProjects(false);
     }).catch(() => setLoadingProjects(false));
@@ -57,6 +59,11 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (!selectedId) return;
     
+    if (skipFetchRef.current) {
+      skipFetchRef.current = false;
+      return;
+    }
+
     setLoadingMessages(true);
     setPlan(null);
 
@@ -91,6 +98,32 @@ export default function WorkspacePage() {
     } catch (e) { console.error(e); }
   };
 
+  const handleUpgradeToProject = async (title: string, fullHistory: {role: string, content: string}[]) => {
+    setSending(true);
+    try {
+      const newProject = await createProjectFromDraft(title, fullHistory);
+      
+      skipFetchRef.current = true;
+      
+      setMessages(localMessages);
+      
+      setProjects(prev => [newProject, ...prev]);
+      setSelectedId(newProject.id);
+      
+      setMobilePlanOpen(true);
+      setGenerating(true);
+      
+      const newPlan = await generatePlan(newProject.id);
+      setPlan(newPlan);
+    } catch (e) {
+      console.error("Upgrade failed", e);
+      alert("Не удалось создать проект. Попробуйте еще раз.");
+    } finally {
+      setGenerating(false);
+      setSending(false);
+    }
+  };
+
   if (loadingProjects) {
     return <div className="flex h-[calc(100dvh-4rem)] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -101,7 +134,7 @@ export default function WorkspacePage() {
       <SidebarLeft 
         projects={projects}
         selectedId={selectedId}
-        onSelect={(id: number) => { setSelectedId(id); setMobileHistoryOpen(false); }}
+        onSelect={(id: number) => { setSelectedId(id); setStarted(true); setMobileHistoryOpen(false); }}
         onNew={handleNewProject}
         onDelete={handleDeleteProject}
         isOpen={mobileHistoryOpen}
@@ -114,7 +147,7 @@ export default function WorkspacePage() {
             <button onClick={() => setMobileHistoryOpen(true)} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full active:bg-gray-200">
               <History size={14} className="text-primary"/> Идеи
             </button>
-            <span className="text-xs font-extrabold text-text-primary truncate px-2">{selectedProject?.title || "Ассистент"}</span>
+            <span className="text-xs font-extrabold text-text-primary truncate px-2">{selectedProject?.title || "Скрининг ИИ"}</span>
             <button onClick={() => setMobilePlanOpen(true)} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full active:bg-gray-200">
                План <FileText size={14} className="text-accent-green"/>
             </button>
@@ -133,6 +166,7 @@ export default function WorkspacePage() {
             loadingMessages={loadingMessages}
             plan={plan}
             onOpenPlan={() => setMobilePlanOpen(true)}
+            onUpgradeToProject={handleUpgradeToProject}
           />
         )}
       </div>
@@ -151,10 +185,6 @@ export default function WorkspacePage() {
     </div>
   );
 }
-
-// ==========================================
-// ПОДКОМПОНЕНТЫ
-// ==========================================
 
 function SidebarLeft({ projects, selectedId, onSelect, onNew, onDelete, isOpen, setIsOpen }: any) {
   return (
@@ -197,7 +227,7 @@ function SidebarLeft({ projects, selectedId, onSelect, onNew, onDelete, isOpen, 
   );
 }
 
-function ChatArea({ selectedId, messages, setMessages, sending, setSending, loadingMessages, plan, onOpenPlan }: any) {
+function ChatArea({ selectedId, messages, setMessages, sending, setSending, loadingMessages, plan, onOpenPlan, onUpgradeToProject }: any) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -214,9 +244,24 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
       if (!selectedId) {
         const userMsg = { id: Date.now(), role: "user", content: text, thread_id: "workspace" };
         setMessages((prev: any) => [...prev, userMsg]);
-        const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+        
+        const history = [...messages, userMsg].map((m: any) => ({ role: m.role, content: m.content }));
         const res = await getDraftReply(history, text);
-        setMessages((prev: any) => [...prev, { id: Date.now() + 1, role: "ai", content: res.reply }]);
+        let replyText = res.reply;
+        
+        const planReadyMatch = replyText.match(/\[PLAN_READY:\s*(.*?)\]/i);
+        
+        if (planReadyMatch) {
+          const title = planReadyMatch[1].trim();
+          replyText = replyText.replace(planReadyMatch[0], "").trim();
+          
+          const aiMsg = { id: Date.now() + 1, role: "ai", content: replyText, thread_id: "workspace" };
+          setMessages((prev: any) => [...prev, aiMsg]);
+          
+          onUpgradeToProject(title, [...history, { role: "ai", content: replyText }]);
+        } else {
+          setMessages((prev: any) => [...prev, { id: Date.now() + 1, role: "ai", content: replyText, thread_id: "workspace" }]);
+        }
       } else {
         setMessages((prev: any) => [...prev, { id: Date.now(), role: "user", content: text }]);
         const reply = await sendMessage(selectedId, text);
@@ -236,7 +281,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center h-full">
             <Bot size={40} className="text-gray-200 mb-3" />
-            <p className="text-sm text-gray-400">Опишите вашу идею, бюджет или город.<br/>Ассистент поможет составить план.</p>
+            <p className="text-sm text-gray-400">Опишите вашу идею, бюджет или город.<br/>Ассистент будет задавать вопросы, чтобы составить план.</p>
           </div>
         ) : (
           <div className="space-y-6 max-w-3xl mx-auto pb-4">
@@ -252,7 +297,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
               </div>
             ))}
             
-            {userMsgCount >= 1 && !plan && !loadingMessages && (
+            {selectedId && userMsgCount >= 1 && !plan && !loadingMessages && (
               <div className="flex flex-col items-center justify-center p-6 mt-6 mb-4 bg-white rounded-2xl border border-gray-200 shadow-sm mx-auto w-full max-w-sm">
                 <div className="bg-primary/10 p-3 rounded-full mb-3"><Sparkles className="text-primary h-6 w-6 animate-pulse"/></div>
                 <p className="text-sm font-bold text-text-primary mb-1">Идея сформирована?</p>
@@ -263,7 +308,9 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
               </div>
             )}
 
-            {sending && <div className="flex items-center gap-2 text-xs text-gray-400 font-medium pl-11"><Loader2 size={14} className="animate-spin text-primary" /> Ассистент печатает...</div>}
+
+
+            {sending && <div className="flex items-center gap-2 text-xs text-gray-400 font-medium pl-11"><Loader2 size={14} className="animate-spin text-primary" /> Ассистент анализирует...</div>}
             <div ref={messagesEndRef} className="h-1" />
           </div>
         )}
@@ -272,7 +319,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
       <div className="shrink-0 p-3 md:p-4 bg-white border-t border-gray-100">
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 max-w-3xl mx-auto relative">
           <input
-            value={input} onChange={(e) => setInput(e.target.value)} placeholder="Какую нишу разберем?"
+            value={input} onChange={(e) => setInput(e.target.value)} placeholder="Напишите ответ..."
             className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-3.5 text-sm outline-none transition-all focus:border-primary focus:bg-white focus:ring-4 focus:ring-primary/10"
           />
           <Button type="submit" size="icon" disabled={!input.trim() || sending} className="absolute right-1.5 top-1.5 h-9 w-9 rounded-xl bg-primary hover:bg-primary-dark">
@@ -290,7 +337,7 @@ function SidebarRight({ plan, selectedId, setPlan, generating, setGenerating, is
     try {
       const newPlan = plan ? await updatePlan(selectedId) : await generatePlan(selectedId);
       setPlan(newPlan);
-    } catch (e) { alert("Сначала обсудите идею в чате!"); } 
+    } catch (e) { alert("Необходим контекст диалога!"); } 
     finally { setGenerating(false); }
   };
 
@@ -362,9 +409,21 @@ function SidebarRight({ plan, selectedId, setPlan, generating, setGenerating, is
                 </div>
               </div>
 
-              <Button onClick={handleGenerate} disabled={generating} className="w-full mt-2" variant="outline">
-                {generating ? <Loader2 size={14} className="animate-spin mr-2" /> : null} Пересчитать план
-              </Button>
+              <div className="space-y-2 mt-4 pt-3 border-t border-gray-100">
+                <Link href={`/dashboard?id=${selectedId}`} className="block w-full">
+                  <Button className="w-full bg-primary hover:bg-primary-dark shadow-md text-white font-bold h-11 text-xs">
+                    Управлять бизнесом (Кабинет) 🚀
+                  </Button>
+                </Link>
+                <Button 
+                  onClick={handleGenerate} 
+                  disabled={generating} 
+                  className="w-full text-[11px] text-gray-400 hover:text-primary transition-colors h-8" 
+                  variant="ghost"
+                >
+                  {generating ? <Loader2 size={12} className="animate-spin mr-1.5" /> : null} Пересчитать параметры
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -379,7 +438,7 @@ function EmptyState({ onStart }: { onStart: () => void }) {
       <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/10 shadow-sm"><Sparkles className="h-10 w-10 text-primary animate-pulse" /></div>
       <h2 className="text-2xl font-bold text-text-primary">ИИ-Навигатор бизнеса</h2>
       <p className="mt-3 text-sm text-gray-500 max-w-sm leading-relaxed">Задайте вопрос, расскажите о бюджете или страхах. Я оценю рынок и составлю пошаговый план открытия.</p>
-      <Button size="lg" className="mt-8 px-8" onClick={onStart}><Plus className="mr-2 h-4 w-4" /> Начать новый проект</Button>
+      <Button size="lg" className="mt-8 px-8" onClick={onStart}><Plus className="mr-2 h-4 w-4" /> Начать скрининг идеи</Button>
     </div>
   );
 }

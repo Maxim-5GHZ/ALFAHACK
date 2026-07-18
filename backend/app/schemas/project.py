@@ -22,3 +22,13 @@ class ProjectResponse(BaseModel):
     business_plan: BusinessPlanResponse | None = None
 
     model_config = {"from_attributes": True}
+
+
+class DraftMessageInput(BaseModel):
+    role: str
+    content: str
+
+
+class ProjectFromDraftRequest(BaseModel):
+    title: str
+    messages: list[DraftMessageInput]

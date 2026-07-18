@@ -166,6 +166,13 @@ MOCK_PLANS: dict[str, dict[str, Any]] = {
 
 def _clean_json_response(text: str) -> str:
     text = text.strip()
+    
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        return text[start_idx:end_idx + 1]
+    
     if text.startswith("```"):
         text = text.removeprefix("```json").removeprefix("```").strip()
         if text.endswith("```"):

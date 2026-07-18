@@ -8,7 +8,7 @@ import { Loader2, LogIn, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiPost } from "@/lib/api";
+import { apiPost, apiGet } from "@/lib/api";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -57,7 +57,17 @@ export default function LoginPage() {
 
       const res = await apiPost<{ access_token: string }>(endpoint, body);
       localStorage.setItem("token", res.access_token);
-      window.location.href = "/workspace";
+
+      try {
+        const projects = await apiGet<any[]>("/api/v1/projects", res.access_token);
+        if (projects.length > 0) {
+          window.location.href = "/dashboard";
+        } else {
+          window.location.href = "/workspace";
+        }
+      } catch (err) {
+        window.location.href = "/workspace";
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка");
     } finally {
