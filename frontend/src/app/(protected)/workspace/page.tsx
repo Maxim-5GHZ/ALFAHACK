@@ -17,6 +17,7 @@ import {
 } from "@/lib/projects";
 
 export default function WorkspacePage() {
+  const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -37,6 +38,11 @@ export default function WorkspacePage() {
   const selectedProject = projects.find((p) => p.id === selectedId) ?? null;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     const params = new URLSearchParams(window.location.search);
     const idFromUrl = params.get("id");
     const shouldOpenPlan = params.get("openPlan") === "true";
@@ -53,10 +59,10 @@ export default function WorkspacePage() {
       }
       setLoadingProjects(false);
     }).catch(() => setLoadingProjects(false));
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !mounted) return;
     
     if (skipFetchRef.current) {
       skipFetchRef.current = false;
@@ -74,7 +80,7 @@ export default function WorkspacePage() {
       setPlan(planData);
       setLoadingMessages(false);
     });
-  }, [selectedId]);
+  }, [selectedId, mounted]);
 
   const handleNewProject = () => {
     setSelectedId(null);
@@ -123,7 +129,7 @@ export default function WorkspacePage() {
     }
   };
 
-  if (loadingProjects) {
+  if (!mounted || loadingProjects) {
     return <div className="flex h-[calc(100dvh-4rem)] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -230,8 +236,16 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  useEffect(() => scrollToBottom(), [messages, sending]);
+  const scrollToBottom = () => {
+    try {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "auto" });
+      }
+    } catch (err) {
+      console.warn("Scroll failed", err);
+    }
+  };
+  useEffect(() => { scrollToBottom(); }, [messages, sending]);
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
@@ -301,7 +315,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
                 <div className="bg-primary/10 p-3 rounded-full mb-3"><Sparkles className="text-primary h-6 w-6 animate-pulse"/></div>
                 <p className="text-sm font-bold text-text-primary mb-1">Идея сформирована?</p>
                 <p className="text-xs text-gray-500 mb-4 text-center">ИИ готов рассчитать смету и конкурентов.</p>
-                <Button onClick={onOpenPlan} className="w-full bg-primary hover:bg-primary-dark shadow-md animate-bounce">
+                <Button onClick={onOpenPlan} className="w-full bg-primary hover:bg-primary-dark shadow-md">
                   <FileText className="mr-2 h-4 w-4" /> Открыть панель бизнес-плана
                 </Button>
               </div>
@@ -369,11 +383,11 @@ function SidebarRight({ plan, selectedId, setPlan, generating, setGenerating, is
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                   <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1 mb-1"><TrendingUp size={12} className="text-accent-green" /> Выручка</span>
-                  <span className="text-sm font-extrabold text-accent-green">{plan.monthly_revenue.toLocaleString()} ₽</span>
+                  <span className="text-sm font-extrabold text-accent-green">{(plan.monthly_revenue || 0).toLocaleString()} ₽</span>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                   <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1 mb-1"><Clock size={12} className="text-blue-500" /> Окупаемость</span>
-                  <span className="text-sm font-extrabold text-text-primary">~ {plan.payback_months} мес.</span>
+                  <span className="text-sm font-extrabold text-text-primary">~ {plan.payback_months || 0} мес.</span>
                 </div>
               </div>
 
@@ -383,20 +397,23 @@ function SidebarRight({ plan, selectedId, setPlan, generating, setGenerating, is
                 <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-yellow-400 rounded-full" style={{ width: `${Math.min((plan.competitors_count || 0) * 2, 100)}%` }} /></div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Смета расходов</h4>
-                 <div className="space-y-2.5">
-                   {plan.expenses.map((ex: any, i: number) => (
-                     <div key={i} className="flex justify-between items-center text-xs"><span className="text-gray-600 truncate mr-2">{ex.name}</span><span className="font-bold text-text-primary whitespace-nowrap">{ex.amount.toLocaleString()} ₽</span></div>
-                   ))}
-                 </div>
-                 <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between font-bold text-sm"><span>Итого</span><span className="text-primary">{plan.monthly_expenses.toLocaleString()} ₽</span></div>
-              </div>
+              {plan.expenses && (
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Смета расходов</h4>
+                  <div className="space-y-2.5">
+                    {plan.expenses.map((ex: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center text-xs"><span className="text-gray-600 truncate mr-2">{ex.name}</span><span className="font-bold text-text-primary whitespace-nowrap">{(ex.amount || 0).toLocaleString()} ₽</span></div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between font-bold text-sm"><span>Итого</span><span className="text-primary">{(plan.monthly_expenses || 0).toLocaleString()} ₽</span></div>
+                </div>
+              )}
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex justify-between items-center mb-3"><h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">План запуска</h4><span className="text-xs font-bold text-accent-green">{progressPercent}%</span></div>
-                <div className="space-y-2">
-                  {plan.action_plan.map((step: string, i: number) => {
+              {plan.action_plan && (
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex justify-between items-center mb-3"><h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">План запуска</h4><span className="text-xs font-bold text-accent-green">{progressPercent}%</span></div>
+                  <div className="space-y-2">
+                    {plan.action_plan.map((step: string, i: number) => {
                     const isDone = plan.completed_steps_json?.includes(step);
                     return (
                       <div key={i} className={cn("flex items-start gap-2.5 p-2 rounded-lg border text-xs", isDone ? "bg-accent-green/5 border-accent-green/20 text-gray-400" : "bg-gray-50 border-gray-100 text-text-primary font-medium")}>
@@ -407,6 +424,7 @@ function SidebarRight({ plan, selectedId, setPlan, generating, setGenerating, is
                   })}
                 </div>
               </div>
+              )}
 
               <div className="space-y-2 mt-4 pt-3 border-t border-gray-100">
                 <Link href={`/dashboard?id=${selectedId}`} className="block w-full">

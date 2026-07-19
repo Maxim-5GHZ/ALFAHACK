@@ -14,6 +14,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("id");
 
+  const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +47,11 @@ function DashboardContent() {
   };
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     getProjects()
       .then((data) => {
         setProjects(data);
@@ -58,7 +64,7 @@ function DashboardContent() {
         }
       })
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId, mounted]);
 
   const loadProjectDetails = async (id: number) => {
     try {
@@ -75,7 +81,11 @@ function DashboardContent() {
   };
 
   useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    if (chatRef.current) {
+      try {
+        chatRef.current.scrollTop = chatRef.current.scrollHeight;
+      } catch (e) {}
+    }
   }, [messages, sending, stepLoading]);
 
   const handleCreate = () => {
@@ -92,8 +102,12 @@ function DashboardContent() {
       setActiveTab("feed");
 
       setTimeout(() => {
-        if (window.innerWidth < 1024) {
-          feedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        try {
+          if (window.innerWidth < 1024 && feedSectionRef.current) {
+            feedSectionRef.current.scrollIntoView({ behavior: "auto", block: "start" });
+          }
+        } catch (e) {
+          console.warn(e);
         }
       }, 500);
     }
@@ -134,7 +148,7 @@ function DashboardContent() {
     finally { setSending(false); }
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return <div className="flex h-[calc(100vh-4rem)] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -204,7 +218,7 @@ function DashboardContent() {
                     <span className="block text-[10px] text-gray-400 font-medium">Потенциал выручки</span>
                     <span className="flex items-center gap-1 text-sm font-bold text-text-primary">
                       <TrendingUp size={14} className="text-accent-green" />
-                      {plan ? (plan.monthly_revenue / 1000).toFixed(0) : 0}k ₽
+                      {plan ? ((plan.monthly_revenue || 0) / 1000).toFixed(0) : 0}k ₽
                     </span>
                  </div>
               </div>
@@ -485,12 +499,12 @@ function DashboardContent() {
                         <div>
                           <span className="block text-[10px] text-gray-400 font-medium">Потенциал</span>
                           <span className="flex items-center gap-1 text-sm font-bold text-text-primary">
-                            <TrendingUp size={14} className="text-accent-green" />{(plan.monthly_revenue / 1000).toFixed(0)}k ₽
+                            <TrendingUp size={14} className="text-accent-green" />{((plan.monthly_revenue || 0) / 1000).toFixed(0)}k ₽
                           </span>
                         </div>
                         <div>
                           <span className="block text-[10px] text-gray-400 font-medium">Окупаемость</span>
-                          <span className="text-sm font-bold text-text-primary">{plan.payback_months} мес.</span>
+                          <span className="text-sm font-bold text-text-primary">{plan.payback_months || 0} мес.</span>
                         </div>
                       </div>
                     </div>

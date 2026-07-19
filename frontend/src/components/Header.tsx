@@ -55,19 +55,24 @@ export default function Header() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    let token = null;
+    try {
+      token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    } catch (e) {}
     if (!token) {
       setLoading(false);
       return;
     }
     apiGet<UserInfo>("/api/v1/auth/me", token)
       .then(setUser)
-      .catch(() => localStorage.removeItem("token"))
+      .catch(() => {
+        try { localStorage.removeItem("token"); } catch (e) {}
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    try { localStorage.removeItem("token"); } catch (e) {}
     setUser(null);
     window.location.href = "/";
   };

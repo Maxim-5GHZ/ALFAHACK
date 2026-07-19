@@ -30,15 +30,20 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (pathname.startsWith("/workspace") || pathname.startsWith("/profile") || pathname.startsWith("/dashboard")) return;
-    const token = localStorage.getItem("token");
+    let token = null;
+    try {
+      token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    } catch (e) {}
     if (!token) return;
     apiGet<UserInfo>("/api/v1/auth/me", token)
       .then(setUser)
-      .catch(() => localStorage.removeItem("token"));
+      .catch(() => {
+        try { localStorage.removeItem("token"); } catch (e) {}
+      });
   }, [pathname]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    try { localStorage.removeItem("token"); } catch (e) {}
     window.location.href = "/";
   };
 

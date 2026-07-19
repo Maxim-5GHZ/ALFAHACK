@@ -35,9 +35,13 @@ export type BusinessPlan = {
 };
 
 function getToken(): string {
-  const token = localStorage.getItem("token");
-  if (!token) throw new Error("Not authenticated");
-  return token;
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) throw new Error("Not authenticated");
+    return token;
+  } catch (err) {
+    throw new Error("Storage access denied or unauthenticated");
+  }
 }
 
 export function getProjects(): Promise<Project[]> {
