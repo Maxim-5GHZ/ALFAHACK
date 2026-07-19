@@ -4,8 +4,10 @@ import { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Loader2, TrendingUp, AlertCircle, ArrowRight, Gamepad2, CheckCircle, Bell, Send, ArrowLeft, Bot, User, MessageSquare, BarChart3, Megaphone, Calculator, Shield, Clock } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
+
+const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
 import { getProjects, createProject, getPlan, getChatHistory, completePlanStep, sendMessage, updateProject, type Project, type BusinessPlan, type ChatMessage } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 
