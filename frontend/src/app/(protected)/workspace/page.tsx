@@ -5,10 +5,8 @@ import {
   MessageSquare, Plus, Sparkles, Send, Bot, User, History, 
   Loader2, FileText, TrendingUp, Clock, CheckCircle, MapPin, X, Trash2
 } from "lucide-react";
-import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
 import Link from "next/link";
-
-const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
