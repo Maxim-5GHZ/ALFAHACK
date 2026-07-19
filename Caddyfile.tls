@@ -13,6 +13,7 @@
     @backend {
         path /api/*
         path /health
+        path /v1/*
     }
     reverse_proxy @backend backend:8000
 

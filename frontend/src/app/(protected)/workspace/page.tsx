@@ -6,7 +6,6 @@ import {
   Loader2, FileText, TrendingUp, Clock, CheckCircle, MapPin, X, Trash2
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -290,7 +289,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
                 {msg.role === "ai" && <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Bot size={16} className="text-primary"/></div>}
                 <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm", msg.role === "ai" ? "bg-gray-50 text-text-primary border border-gray-100" : "bg-primary text-white font-medium")}>
                   {msg.role === "ai" ? (
-                    <div className="prose prose-sm leading-relaxed [&_ul]:pl-4 [&_ol]:pl-4 [&_p]:mb-2 [&_p:last-child]:mb-0"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
+                    <div className="prose prose-sm leading-relaxed [&_ul]:pl-4 [&_ol]:pl-4 [&_p]:mb-2 [&_p:last-child]:mb-0"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
                   ) : msg.content}
                 </div>
                 {msg.role === "user" && <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10"><User size={16} className="text-primary"/></div>}
