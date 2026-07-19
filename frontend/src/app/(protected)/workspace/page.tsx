@@ -285,7 +285,7 @@ function ChatArea({ selectedId, messages, setMessages, sending, setSending, load
           </div>
         ) : (
           <div className="space-y-6 max-w-3xl mx-auto pb-4">
-            {messages.map((msg: any, i: number) => (
+            {messages && messages.map((msg: any, i: number) => (
               <div key={msg.id || i} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}>
                 {msg.role === "ai" && <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Bot size={16} className="text-primary"/></div>}
                 <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm", msg.role === "ai" ? "bg-gray-50 text-text-primary border border-gray-100" : "bg-primary text-white font-medium")}>
